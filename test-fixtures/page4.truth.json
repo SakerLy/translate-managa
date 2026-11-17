@@ -1,0 +1,21 @@
+{
+  "_note": "Text areas of the speech bubbles in page4.png (768x1087), measured by hand in pixels: [x0, y0, x1, y1]. Checked visually with draw-boxes.py.",
+  "width": 768,
+  "height": 1087,
+  "bubbles": [
+    { "id": "AKU CUMA HERAN", "box": [70, 95, 178, 310] },
+    { "id": "TENTU SAJA AKU SENANG", "box": [155, 40, 240, 205] },
+    { "id": "HEI, IORI-KUN", "box": [600, 70, 710, 225] },
+    { "id": "PACARMU YANG IMUT", "box": [515, 150, 615, 315] },
+    { "id": "TAPI KALAU HARUS PULANG", "box": [85, 370, 225, 545] },
+    { "id": "OH, KELASNYA LIBUR", "box": [595, 345, 710, 545] },
+    { "id": "PANTAS SAJA", "box": [420, 445, 555, 590] },
+    { "id": "MASA SIH", "box": [595, 600, 675, 690] },
+    { "id": "PADAHAL TASMU", "box": [55, 615, 205, 760] },
+    { "id": "AKTINGNYA KELEWATAN", "box": [415, 625, 550, 745] },
+    { "id": "DIA BAHKAN", "box": [40, 850, 215, 1010] },
+    { "id": "TENTU SAJA. KALAU AKU", "box": [200, 815, 320, 955] },
+    { "id": "BUKAN BEGITU", "box": [460, 800, 560, 1005] },
+    { "id": "KENAPA? MEMANGNYA", "box": [580, 800, 715, 975] }
+  ]
+}

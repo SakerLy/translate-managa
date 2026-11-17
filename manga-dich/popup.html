@@ -1,0 +1,25 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>
+  body { width: 280px; font: 13px "Segoe UI", sans-serif; margin: 12px; }
+  input, button, select { width: 100%; box-sizing: border-box; padding: 6px; margin: 4px 0 8px; }
+  #go { background: #ff6740; color: #fff; border: 0; font-weight: 600; padding: 9px; }
+  #msg { color: #444; min-height: 1em; white-space: pre-wrap; word-break: break-word; }
+</style>
+<label for="provider">Nhà cung cấp AI</label>
+<select id="provider">
+  <option value="anthropic">Anthropic (Claude)</option>
+  <option value="openai">OpenAI (GPT)</option>
+  <option value="gemini">Google (Gemini)</option>
+  <option value="openrouter">OpenRouter (DeepSeek, Grok, Qwen…)</option>
+</select>
+<label for="key">API key</label>
+<input id="key" type="password" placeholder="Dán API key">
+<button id="save">Lưu key & tải model</button>
+<label for="model">Model (mới nhất ở trên cùng)</label>
+<select id="model"></select>
+<label style="display:flex;gap:6px;align-items:center;margin:4px 0 8px"><input type="checkbox" id="polish" style="width:auto;margin:0">Trau chuốt văn phong (thêm 1 lượt gọi chỉ có chữ)</label>
+<div id="msg"></div>
+<button id="go">Bật dịch tự động cho tab này</button>
+<div style="color:#666;font-size:12px">Dịch trang đang xem trước, rồi các trang kế tiếp; lật/cuộn tới đâu dịch tới đó. Bấm lại để thử lại trang bị lỗi.</div>
+<script src="popup.js"></script>
