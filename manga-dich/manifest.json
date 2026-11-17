@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "Manga Dịch",
+  "name": "Dịch Truyện",
   "version": "0.1",
   "description": "Dịch trang truyện tranh sang tiếng Việt bằng AI.",
   "permissions": ["storage", "activeTab", "scripting"],
   "host_permissions": ["<all_urls>"],
   "background": { "service_worker": "background.js" },
-  "action": { "default_popup": "popup.html", "default_title": "Manga Dịch" }
+  "action": { "default_popup": "popup.html", "default_title": "Dịch Truyện" }
 }
