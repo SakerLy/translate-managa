@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Manga Dịch",
   "version": "0.1",
-  "description": "Dịch trang truyện tranh sang tiếng Việt bằng Claude.",
+  "description": "Dịch trang truyện tranh sang tiếng Việt bằng AI.",
   "permissions": ["storage", "activeTab", "scripting"],
   "host_permissions": ["<all_urls>"],
   "background": { "service_worker": "background.js" },

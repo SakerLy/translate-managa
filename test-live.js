@@ -19,7 +19,7 @@ const page = { data: fs.readFileSync(img).toString('base64'), mime: /\.png$/i.te
 const truthFile = img.replace(/\.(png|jpe?g)$/i, '.truth.json');
 const truth = fs.existsSync(truthFile) ? JSON.parse(fs.readFileSync(truthFile, 'utf8')) : null;
 
-const ENV = { anthropic: 'ANTHROPIC_API_KEY', openai: 'OPENAI_API_KEY', gemini: 'GEMINI_API_KEY', openrouter: 'OPENROUTER_API_KEY' };
+const ENV = { anthropic: 'ANTHROPIC_API_KEY', openai: 'OPENAI_API_KEY', gemini: 'GEMINI_API_KEY', openrouter: 'OPENROUTER_API_KEY', groq: 'GROQ_API_KEY' };
 let listener;
 const ctx = { fetch, btoa, AbortSignal, chrome: { runtime: { onMessage: { addListener: (f) => (listener = f) } } } };
 vm.createContext(ctx);

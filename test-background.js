@@ -42,6 +42,12 @@ const call = (msg) => new Promise((res) => listener(msg, null, res));
   assert.deepEqual((await call({ type: 'models', provider: 'gemini', key: 'k' })).list,
     ['gemini-3-pro', 'gemini-3-pro-image', 'gemini-2.5-flash', 'gemini-flash-latest']);
 
+  // Groq: inactive models dropped, newest first (shape per Groq's API reference)
+  replies = { 'https://api.groq.com/openai/v1/models': { data: [
+    { id: 'qwen/qwen3.8-27b', created: 5, active: true }, { id: 'old-model', created: 9, active: false }, { id: 'whisper-x', created: 7, active: true },
+  ] } };
+  assert.deepEqual((await call({ type: 'models', provider: 'groq', key: 'k' })).list, ['whisper-x', 'qwen/qwen3.8-27b']);
+
   const cap = (img, so) => ({ image_input: { supported: img }, structured_outputs: { supported: so } });
   replies = { 'https://api.anthropic.com/v1/models': { data: [
     { id: 'claude-opus-5-5', capabilities: cap(true, true) }, { id: 'claude-old', capabilities: cap(true, false) },
@@ -59,8 +65,15 @@ const call = (msg) => new Promise((res) => listener(msg, null, res));
       assert.ok(byId[id].architecture.input_modalities.includes('image'), id);
       assert.ok(byId[id].supported_parameters.includes('structured_outputs'), id);
     }
-    for (let i = 1; i < list.length; i++) assert.ok(byId[list[i - 1]].created >= byId[list[i]].created);
-    console.log('openrouter real list:', list.length, 'models, newest:', list[0]);
+    // free (price 0) first, then paid; newest first inside each group
+    const isFree = (id) => +byId[id].pricing.prompt === 0 && +byId[id].pricing.completion === 0;
+    const firstPaid = list.findIndex((id) => !isFree(id));
+    assert.ok(firstPaid > 0, 'real list has free vision models and they come first');
+    assert.ok(list.slice(firstPaid).every((id) => !isFree(id)), 'no free model after the first paid one');
+    for (let i = 1; i < list.length; i++) {
+      if (isFree(list[i - 1]) === isFree(list[i])) assert.ok(byId[list[i - 1]].created >= byId[list[i]].created);
+    }
+    console.log('openrouter real list:', list.length, 'models,', firstPaid, 'free first:', list.slice(0, firstPaid).join(', '));
   }
 
   // translate path: fenced JSON from an OpenAI-compatible model still parses
@@ -96,12 +109,20 @@ const call = (msg) => new Promise((res) => listener(msg, null, res));
 
   // polish: valid lines replace the draft text but keep the boxes; bad replies keep the draft
   const pol = vm.runInContext('polish', ctx), draft = [{ x: 1, y: 2, w: 3, h: 4, text: 'Tôi không thể tin được' }, { x: 5, y: 6, w: 7, h: 8, text: 'Điều đó là không thể' }];
-  const polished = (content) => { replies = { 'https://openrouter.ai': { choices: [{ message: { content } }] } }; return pol('openrouter', 'k', 'x/y', draft, ''); };
-  let p = await polished('{"lines":["Không tin nổi luôn","Làm gì có chuyện đó!"]}');
-  assert.deepEqual(p.map((b) => [b.x, b.text]), [[1, 'Không tin nổi luôn'], [5, 'Làm gì có chuyện đó!']]);
-  assert.equal((await polished('{"lines":["chỉ một câu"]}'))[0].text, 'Tôi không thể tin được', 'wrong count keeps draft');
-  assert.equal((await polished('{"lines":["", "x"]}'))[0].text, 'Tôi không thể tin được', 'blank line keeps draft');
-  assert.equal((await polished('not json'))[1].text, 'Điều đó là không thể', 'bad JSON keeps draft');
+  const OLD_G = 'Iori ↔ bạn gái: Iori xưng tớ, gọi cậu';
+  const polished = (content) => { replies = { 'https://openrouter.ai': { choices: [{ message: { content } }] } }; return pol('openrouter', 'k', 'x/y', draft, '', OLD_G); };
+  let p = await polished('{"lines":["Không tin nổi luôn","Làm gì có chuyện đó!"],"glossary":"' + OLD_G + '\\nIori ↔ mẹ: con/mẹ"}');
+  assert.deepEqual(p.bubbles.map((b) => [b.x, b.text]), [[1, 'Không tin nổi luôn'], [5, 'Làm gì có chuyện đó!']]);
+  assert.equal(p.glossary, OLD_G + '\nIori ↔ mẹ: con/mẹ', 'updated glossary is returned');
+  assert.equal((await polished('{"lines":["a","b"],"glossary":""}')).glossary, OLD_G, 'empty glossary keeps the old one');
+  assert.equal((await polished('{"lines":["chỉ một câu"],"glossary":"' + OLD_G + '"}')).bubbles[0].text, 'Tôi không thể tin được', 'wrong count keeps draft');
+  assert.equal((await polished('{"lines":["", "x"]}')).bubbles[0].text, 'Tôi không thể tin được', 'blank line keeps draft');
+  const bad = await polished('not json');
+  assert.equal(bad.bubbles[1].text, 'Điều đó là không thể', 'bad JSON keeps draft'); assert.equal(bad.glossary, OLD_G, 'and the old glossary');
+  // the glossary reaches the prompt
+  let sentBody; const f0 = ctx.fetch; ctx.fetch = async (u, init) => { sentBody = init.body; return f0(u, init); };
+  await polished('{"lines":["a","b"],"glossary":"x"}'); ctx.fetch = f0;
+  assert.ok(JSON.parse(sentBody).messages[1].content.at(-1).text.startsWith('BẢNG XƯNG HÔ:\n' + OLD_G));
   // eviction keeps the newest CACHE_MAX entries
   const max = vm.runInContext('CACHE_MAX', ctx), put = vm.runInContext('cachePut', ctx);
   for (let i = 0; i < max + 5; i++) store['c:m:' + i] = { t: i, bubbles: [] };

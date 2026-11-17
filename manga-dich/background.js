@@ -38,7 +38,9 @@ const POLISH_SYSTEM = `Bạn là biên tập viên lời thoại truyện tranh 
 Bạn nhận các bong bóng của MỘT trang theo thứ tự đọc, mỗi mục có "src" (chữ gốc trong ảnh) và "draft" (bản dịch nháp). Viết lại draft cho tự nhiên.
 Giữ nghĩa là bắt buộc, văn hay là thứ hai:
 - Đọc src để biết chính xác ai làm gì cho ai, ai xin/ai cho, phủ định hay khẳng định, câu hỏi hay câu kể. KHÔNG đảo chủ ngữ/tân ngữ, KHÔNG thêm chi tiết không có trong src (vd "từ đời nào", "con bé"), KHÔNG bỏ ý.
-- Giữ người nói của draft. Xưng hô giữa cùng hai người phải thống nhất cả trang (và với trang trước nếu có): nếu draft lẫn lộn (lúc cậu/tớ lúc anh/em) thì chọn một cặp hợp nhất và sửa mọi câu theo cặp đó.
+- Giữ người nói của draft. Xưng hô giữa cùng hai người phải thống nhất cả trang: nếu draft lẫn lộn (lúc cậu/tớ lúc anh/em) thì chọn một cặp hợp nhất và sửa mọi câu theo cặp đó.
+- BẢNG XƯNG HÔ (nếu được đưa) là quyết định của các trang trước: cặp nào đã có trong bảng thì BẮT BUỘC dùng đúng cặp đó, kể cả khi draft dùng cặp khác. Không đổi cặp đã có.
+- Trả về "glossary": bảng xưng hô sau trang này = bảng cũ + cặp mới gặp ở trang này, mỗi dòng một cặp, ghi CẢ HAI CHIỀU dạng "A ↔ B: A xưng X gọi B là Y; B xưng Y gọi A là X" (dùng tên hoặc mô tả ngắn: "Iori", "bạn gái của Iori", "người dẫn chương trình"). Sửa mọi câu của cả A và B theo đúng chiều của người nói. Không có gì mới thì trả lại bảng cũ.
 - Draft đã đúng và tự nhiên thì giữ nguyên.
 - Bản tin TV/radio, thông báo, khung dẫn truyện giữ giọng trang trọng, không thêm "đấy/nhé".
 Cách viết:
@@ -47,7 +49,6 @@ Cách viết:
 - Bỏ văn dịch máy: "của cậu/của tôi" thừa, "một cách", "điều đó", "việc", "có thể" thừa, "đã/đang/sẽ" thừa, "coi như là", "có vẻ như", từ Hán Việt trang trọng trong chuyện đời thường.
 - Lời nghĩ thầm viết như độc thoại trong đầu (gọn, có thể bỏ chủ ngữ). Dẫn truyện/TV/radio viết văn kể gọn.
 - Cảm thán, trêu, mắng phải có lực; dùng cách nói tương đương của tiếng Việt nếu hợp nhân vật.
-- Xưng hô nhất quán với bản nháp và với lời thoại trang trước (nếu có).
 - Viết hoa bình thường, KHÔNG viết hoa toàn bộ. Giữ "...", "?!". Giữ tên riêng và -san/-kun/-chan.
 Ví dụ cứng → tự nhiên:
 "Tôi không thể tin được là bạn đã thực sự làm điều đó." → "Không tin nổi là cậu làm thật luôn đấy."
@@ -57,20 +58,27 @@ Ví dụ cứng → tự nhiên:
 Trả về mảng lines đúng bằng số mục nhận được, cùng thứ tự, mỗi phần tử là câu đã viết lại.`;
 const POLISH_JOB = {
   system: POLISH_SYSTEM, name: 'lines',
-  schema: { type: 'object', additionalProperties: false, required: ['lines'], properties: { lines: { type: 'array', items: { type: 'string' } } } },
+  schema: {
+    type: 'object', additionalProperties: false, required: ['lines', 'glossary'],
+    properties: { lines: { type: 'array', items: { type: 'string' } }, glossary: { type: 'string' } },
+  },
 };
 
-// Never loses a translation: any failure or a wrong line count keeps the draft.
-async function polish(provider, key, model, bubbles, context) {
-  if (!bubbles.length) return bubbles;
+// Never loses a translation: any failure or a wrong line count keeps the draft (and the old glossary).
+// glossary: pronoun pairs agreed on earlier pages of this tab; returned updated for the next pages.
+async function polish(provider, key, model, bubbles, context, glossary = '') {
+  if (!bubbles.length) return { bubbles, glossary };
   try {
-    const prompt = (context ? `Lời thoại trang trước:\n${context}\n\n` : '') + 'Các bong bóng:\n' + JSON.stringify(bubbles.map((b) => ({ src: b.src || '', draft: b.text })));
+    const prompt = (glossary ? `BẢNG XƯNG HÔ:\n${glossary}\n\n` : '') + (context ? `Lời thoại trang trước:\n${context}\n\n` : '')
+      + 'Các bong bóng:\n' + JSON.stringify(bubbles.map((b) => ({ src: b.src || '', draft: b.text })));
     const raw = await PROVIDERS[provider].translate(key, model, null, prompt, undefined, POLISH_JOB);
-    const { lines } = JSON.parse(raw.replace(/^\s*```(?:json)?|```\s*$/g, ''));
-    if (!Array.isArray(lines) || lines.length !== bubbles.length || lines.some((l) => typeof l !== 'string' || !l.trim())) return bubbles;
-    return bubbles.map((b, i) => ({ ...b, text: lines[i].trim() }));
+    const out = JSON.parse(raw.replace(/^\s*```(?:json)?|```\s*$/g, ''));
+    const g = typeof out.glossary === 'string' && out.glossary.trim() ? out.glossary.trim().slice(0, 1500) : glossary; // cap: it rides in every later prompt
+    const { lines } = out;
+    if (!Array.isArray(lines) || lines.length !== bubbles.length || lines.some((l) => typeof l !== 'string' || !l.trim())) return { bubbles, glossary: g };
+    return { bubbles: bubbles.map((b, i) => ({ ...b, text: lines[i].trim() })), glossary: g };
   } catch {
-    return bubbles;
+    return { bubbles, glossary };
   }
 }
 
@@ -161,10 +169,11 @@ async function probe({ provider, key, model }) {
 }
 
 // OpenAI, OpenRouter: same chat-completions wire format, only base URL, model filter and extras differ.
-const openaiCompat = (base, keep, extra = () => ({})) => ({
+// rank(m): lower sorts first (e.g. free models before paid); ties go newest first.
+const openaiCompat = (base, keep, extra = () => ({}), rank = () => 0) => ({
   async models(key) {
     const { data } = await api(`${base}/models`, { headers: { authorization: `Bearer ${key}` } });
-    return data.filter(keep).sort((a, b) => b.created - a.created).map((m) => m.id);
+    return data.filter(keep).sort((a, b) => rank(a) - rank(b) || (b.created ?? 0) - (a.created ?? 0)).map((m) => m.id);
   },
   async translate(key, model, img, prompt, timeoutS, job = PAGE_JOB) {
     const body = await api(`${base}/chat/completions`, json({ authorization: `Bearer ${key}` }, {
@@ -235,12 +244,18 @@ const PROVIDERS = {
       return text;
     },
   },
+  // Groq (OpenAI-compatible, has a free tier). Per its docs: GET /models items carry `active`; images go as
+  // image_url data URIs; strict json_schema works on its vision models (qwen/qwen3.8-27b); max_tokens is
+  // deprecated for max_completion_tokens. The list has no vision flag, so probe() decides which work.
+  groq: openaiCompat('https://api.groq.com/openai/v1', (m) => m.active !== false, () => ({ max_completion_tokens: 4096 })),
   // Without max_tokens OpenRouter reserves credit for the model's full output limit (65536 seen in a real
   // run) and rejects low-balance keys. A dense real page's JSON is ~1100 chars; 4096 leaves room for reasoning.
   // :free models cost nothing to reserve, and a reasoning one (nemotron :free) ran out at 4096 on a real page.
   openrouter: openaiCompat('https://openrouter.ai/api/v1', (m) =>
     m.architecture?.input_modalities?.includes('image') && m.supported_parameters?.includes('structured_outputs')
-    && !m.id.endsWith(':batch'), (model) => ({ max_tokens: model.endsWith(':free') ? 16000 : 4096 })),
+    && !m.id.endsWith(':batch'), (model) => ({ max_tokens: model.endsWith(':free') ? 16000 : 4096 }),
+    // free first: priced at 0 per the model list itself (also catches openrouter/free, which has no :free suffix)
+    (m) => (+m.pricing?.prompt === 0 && +m.pricing?.completion === 0 ? 0 : 1)),
 };
 
 // Cache by image content + model: MangaDex recreates <img> tags for pages you go back to, and F5 reloads
@@ -259,22 +274,29 @@ async function cachePut(key, bubbles) {
   }
 }
 
-async function translate({ data, mime, url, context }) {
+// Returns { bubbles, glossary }. glossary (pronoun pairs for this tab) only changes when polish runs.
+async function translate({ data, mime, url, context, glossary = '' }) {
   if (!data) ({ data, mime } = await fetchImage(url));
   const { provider = 'anthropic', keys = {}, models = {}, polish: doPolish = true } = await chrome.storage.local.get(['provider', 'keys', 'models', 'polish']);
   if (!keys[provider] || !models[provider]) throw new Error('Chưa nhập API key / chọn model (bấm icon extension).');
   const key = await cacheKey(models[provider] + (doPolish ? '+p' : ''), data);
   const hit = (await chrome.storage.local.get(key))[key];
-  if (hit) return hit.bubbles; // same page already translated by this model: no API call
+  if (hit) return { bubbles: hit.bubbles, glossary }; // same page already translated by this model: no API call
   const prompt = context ? `Lời thoại trang trước (giữ xưng hô nhất quán):\n${context}` : 'Đây là trang đầu tiên.';
   let bubbles = parseBubbles(await PROVIDERS[provider].translate(keys[provider], models[provider], { data, mime }, prompt, undefined, pageJob(doPolish)));
-  if (doPolish) bubbles = await polish(provider, keys[provider], models[provider], bubbles, context);
+  if (doPolish) {
+    const before = glossary;
+    ({ bubbles, glossary } = await polish(provider, keys[provider], models[provider], bubbles, context, glossary));
+    // This page just added pronoun pairs: polish it once more under them, so it follows its own decision.
+    // (gemini-3.1-flash-lite, real page, 3 runs: 1-2 mixed lines left after one pass, 0 after this.)
+    if (glossary !== before) ({ bubbles, glossary } = await polish(provider, keys[provider], models[provider], bubbles, context, glossary));
+  }
   await cachePut(key, bubbles);
-  return bubbles;
+  return { bubbles, glossary };
 }
 
 chrome.runtime.onMessage.addListener((msg, _sender, send) => {
-  const job = msg.type === 'translate' ? translate(msg).then((bubbles) => ({ bubbles }))
+  const job = msg.type === 'translate' ? translate(msg)
     : msg.type === 'models' ? PROVIDERS[msg.provider].models(msg.key).then((list) => ({ list }))
     : msg.type === 'probe' ? probe(msg).then((sample) => ({ sample }))
     : null;
