@@ -29,26 +29,17 @@ function fitBubbles(px, bubbles) {
   // a letter whose centre sits in another bubble's box belongs to that bubble (seen in a real run: growth
   // crossed into the neighbouring bubble's text)
   const othersOwn = (me, cx, cy) => boxes.some((o, j) => j !== me && cx >= o[0] && cx < o[2] && cy >= o[1] && cy < o[3]);
+  const CHAR = Math.max(12, 0.08 * Math.min(W, H)); // bigger than this in either direction = not a letter
+  const G = Math.max(4, Math.round(0.012 * Math.min(W, H))); // join distance for letters of the same text
+  const P = 2;
 
-  return bubbles.map((b, me) => {
-    const [bx0, by0, bx1, by1] = boxes[me];
-    if (bx1 - bx0 < 4 || by1 - by0 < 4) return b;
-    const bg = bgOf(bx0, by0, bx1, by1);
-    const lum = 0.299 * bg[0] + 0.587 * bg[1] + 0.114 * bg[2];
-    const style = { bg: `rgb(${bg[0]},${bg[1]},${bg[2]})`, fg: lum < 110 ? '#fff' : '#111' };
-    // a box over 8% of the page is already a model mistake (largest real bubble on the test page: 3.4%);
-    // growing it would follow hair/screentone into the art
-    if ((bx1 - bx0) * (by1 - by0) > 0.08 * W * H) return { ...b, ...style, fit: 'kept' };
-
-    // Ink blobs (connected non-background pixels) in a window around the box. Letters are small blobs;
-    // bubble outlines, panel borders and artwork are big ones. Bubbles that spill over panel borders are
-    // common in manga, so this doesn't need the bubble to be a closed shape.
-    const mx = Math.round((bx1 - bx0) * 0.5), my = Math.round((by1 - by0) * 0.5);
-    const wx0 = Math.max(0, bx0 - mx), wy0 = Math.max(0, by0 - my), wx1 = Math.min(W, bx1 + mx), wy1 = Math.min(H, by1 + my);
+  // Ink blobs (connected non-background pixels) in a window. Letters are small blobs; bubble outlines,
+  // panel borders and artwork are big ones. Bubbles that spill over panel borders are common in manga,
+  // so this doesn't need the bubble to be a closed shape.
+  const lettersIn = (me, bg, wx0, wy0, wx1, wy1) => {
     const ww = wx1 - wx0, wh = wy1 - wy0;
     const label = new Int32Array(ww * wh); // 0 = background / unvisited
     const blobs = [];
-    const CHAR = Math.max(12, 0.08 * Math.min(W, H)); // bigger than this in either direction = not a letter
     for (let sy = wy0; sy < wy1; sy++) for (let sx = wx0; sx < wx1; sx++) {
       const s0 = (sy - wy0) * ww + (sx - wx0);
       if (label[s0] || near(at(sx, sy), bg)) continue;
@@ -68,12 +59,12 @@ function fitBubbles(px, bubbles) {
       }
       blobs.push(bl);
     }
-    const letters = blobs.filter((bl) => !bl.edge && bl.x1 - bl.x0 < CHAR && bl.y1 - bl.y0 < CHAR
+    return blobs.filter((bl) => !bl.edge && bl.x1 - bl.x0 < CHAR && bl.y1 - bl.y0 < CHAR
       && !othersOwn(me, (bl.x0 + bl.x1) / 2, (bl.y0 + bl.y1) / 2));
+  };
 
-    // grow from the model's box: take letter blobs touching it (within G px), repeat so whole lines join
-    const G = Math.max(4, Math.round(0.012 * Math.min(W, H)));
-    let x0 = bx0, y0 = by0, x1 = bx1, y1 = by1;
+  // grow a set of letter blobs from a seed box (within G px), repeat so whole lines join
+  const grow = (letters, x0, y0, x1, y1) => {
     for (let pass = 0, grew = true; grew && pass < 6; pass++) {
       grew = false;
       for (const bl of letters) {
@@ -82,10 +73,44 @@ function fitBubbles(px, bubbles) {
         x0 = Math.min(x0, bl.x0); y0 = Math.min(y0, bl.y0); x1 = Math.max(x1, bl.x1 + 1); y1 = Math.max(y1, bl.y1 + 1);
       }
     }
-    const P = 2;
-    x0 = Math.max(wx0, x0 - P); y0 = Math.max(wy0, y0 - P); x1 = Math.min(wx1, x1 + P); y1 = Math.min(wy1, y1 + P);
+    return [Math.max(0, x0 - P), Math.max(0, y0 - P), x1 + P, y1 + P];
+  };
+
+  return bubbles.map((b, me) => {
+    const [bx0, by0, bx1, by1] = boxes[me];
+    if (bx1 - bx0 < 4 || by1 - by0 < 4) return b;
+    const bg = bgOf(bx0, by0, bx1, by1);
+    const lum = 0.299 * bg[0] + 0.587 * bg[1] + 0.114 * bg[2];
+    const style = { bg: `rgb(${bg[0]},${bg[1]},${bg[2]})`, fg: lum < 110 ? '#fff' : '#111' };
+
+    // A box over 8% of the page is already a model mistake (largest real bubble on the test page: 3.4%):
+    // growing it would follow hair/screentone into the art. Try to shrink it to the text cluster inside
+    // instead — the model aims its centre at the text even when the box is way too big — and keep the
+    // model's box only if no plausible cluster is found.
+    const shrink = () => {
+      const mx = Math.round((bx1 - bx0) * 0.5), my = Math.round((by1 - by0) * 0.5);
+      const wx0 = Math.max(0, bx0 - mx), wy0 = Math.max(0, by0 - my), wx1 = Math.min(W, bx1 + mx), wy1 = Math.min(H, by1 + my);
+      const letters = lettersIn(me, bg, wx0, wy0, wx1, wy1);
+      if (letters.length < 3) return null;
+      const cx = (bx0 + bx1) / 2, cy = (by0 + by1) / 2;
+      let seed = null, best = Infinity;
+      for (const bl of letters) {
+        const d = Math.hypot((bl.x0 + bl.x1) / 2 - cx, (bl.y0 + bl.y1) / 2 - cy);
+        if (d < best) { best = d; seed = bl; }
+      }
+      seed.used = true;
+      const [x0, y0, x1, y1] = grow(letters, seed.x0, seed.y0, seed.x1 + 1, seed.y1 + 1);
+      if ((x1 - x0) * (y1 - y0) > 0.08 * W * H || letters.filter((bl) => bl.used).length < 3) return null;
+      return { fit: 'shrink', x: x0 / W * 100, y: y0 / H * 100, w: (x1 - x0) / W * 100, h: (y1 - y0) / H * 100 };
+    };
+    if ((bx1 - bx0) * (by1 - by0) > 0.08 * W * H) return { ...b, ...style, ...(shrink() || { fit: 'kept' }) };
+
+    const mx = Math.round((bx1 - bx0) * 0.5), my = Math.round((by1 - by0) * 0.5);
+    const wx0 = Math.max(0, bx0 - mx), wy0 = Math.max(0, by0 - my), wx1 = Math.min(W, bx1 + mx), wy1 = Math.min(H, by1 + my);
+    const letters = lettersIn(me, bg, wx0, wy0, wx1, wy1);
+    const [x0, y0, x1, y1] = grow(letters, bx0, by0, bx1, by1);
     // runaway guard: a fit more than 2x the model's box means we followed artwork, not letters
-    if ((x1 - x0) * (y1 - y0) > 2 * (bx1 - bx0) * (by1 - by0)) return { ...b, ...style, fit: 'kept' };
+    if ((x1 - x0) * (y1 - y0) > 2 * (bx1 - bx0) * (by1 - by0)) return { ...b, ...style, ...(shrink() || { fit: 'kept' }) };
     return { ...b, ...style, fit: 'letters', x: x0 / W * 100, y: y0 / H * 100, w: (x1 - x0) / W * 100, h: (y1 - y0) / H * 100 };
   });
 }

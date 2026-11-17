@@ -9,3 +9,4 @@ test-fixtures/result-*.json
 
 node_modules/
 __pycache__/
+page4.rgba

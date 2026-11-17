@@ -1,5 +1,6 @@
 // Real API test (costs a few cents). Uses the same background.js code the extension runs.
 //   Keys: env vars or a .env file next to this script (ANTHROPIC_API_KEY=..., OPENAI_API_KEY, GEMINI_API_KEY, OPENROUTER_API_KEY)
+//   Gateway behind "Tùy chỉnh": CUSTOM_API_KEY=... + CUSTOM_BASE_URL=https://gateway.example/v1
 //   Optional: MODEL_GEMINI=gemini-x (etc.) to test one model instead of "newest that works"
 //   node test-live.js [page.png]          (default: test-fixtures/page4.png)
 // If <page>.truth.json exists, scores box placement: each bubble must get a translation box whose
@@ -19,13 +20,14 @@ const page = { data: fs.readFileSync(img).toString('base64'), mime: /\.png$/i.te
 const truthFile = img.replace(/\.(png|jpe?g)$/i, '.truth.json');
 const truth = fs.existsSync(truthFile) ? JSON.parse(fs.readFileSync(truthFile, 'utf8')) : null;
 
-const ENV = { anthropic: 'ANTHROPIC_API_KEY', openai: 'OPENAI_API_KEY', gemini: 'GEMINI_API_KEY', openrouter: 'OPENROUTER_API_KEY', groq: 'GROQ_API_KEY' };
+const ENV = { anthropic: 'ANTHROPIC_API_KEY', openai: 'OPENAI_API_KEY', gemini: 'GEMINI_API_KEY', openrouter: 'OPENROUTER_API_KEY', groq: 'GROQ_API_KEY', custom: 'CUSTOM_API_KEY' };
+// "Tùy chỉnh" talks to whatever CUSTOM_BASE_URL points at (a gateway/proxy); everything else uses its default URL.
+const BASE = { custom: process.env.CUSTOM_BASE_URL || '' };
 let listener;
 const ctx = { fetch, btoa, AbortSignal, URL, chrome: { runtime: { onMessage: { addListener: (f) => (listener = f) } } } };
 vm.createContext(ctx);
 vm.runInContext(fs.readFileSync(process.env.BG || path.join(__dirname, 'manga-dich/background.js'), 'utf8'), ctx); // BG=other.js to A/B a variant
 ctx.testImage = async () => page; // Node has no OffscreenCanvas: probe with the real page instead
-const PROVIDERS = vm.runInContext('PROVIDERS', ctx); // top-level const isn't a context property
 const call = (msg) => new Promise((res) => listener(msg, null, res));
 
 function score(bubbles) {
@@ -47,7 +49,7 @@ if (require.main === module) (async () => {
     if (process.env.ONLY && process.env.ONLY !== provider) continue; // ONLY=openrouter tests one provider
     if (!key) { console.log(`- ${provider}: bỏ qua (chưa có ${env})`); continue; }
     ran++;
-    const models = await call({ type: 'models', provider, key });
+    const models = await call({ type: 'models', provider, key, base: BASE[provider] });
     if (models.error) { console.log(`✗ ${provider}: lấy danh sách model lỗi: ${models.error}`); failed = true; continue; }
     const forced = process.env['MODEL_' + provider.toUpperCase()];
     console.log(`\n${provider}: ${models.list.length} model, mới nhất: ${models.list.slice(0, 5).join(', ')}`);
@@ -56,7 +58,8 @@ if (require.main === module) (async () => {
       const t0 = Date.now();
       let bubbles;
       try {
-        bubbles = ctx.parseBubbles(await PROVIDERS[provider].translate(key, model, page, 'Đây là trang đầu tiên.'));
+        const P = ctx.providerFor(provider, BASE[provider]); // custom reads its endpoint from the base URL
+        bubbles = ctx.parseBubbles(await P.translate(key, model, page, 'Đây là trang đầu tiên.'));
       } catch (e) { console.log(`  ✗ ${model}: ${e.message}`); continue; }
       const secs = ((Date.now() - t0) / 1000).toFixed(1);
       console.log(`  ${model} (${secs}s) — ${bubbles.length} bong bóng`);

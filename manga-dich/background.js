@@ -8,7 +8,13 @@ Nhìn trang truyện, tìm mọi bong bóng thoại, khung dẫn truyện và ch
 - Hiệu ứng âm thanh (SFX): chỉ dịch khi ngắn và có ý nghĩa, nếu không thì bỏ qua.
 - Bỏ qua watermark, chữ ký nhóm dịch, số trang.
 Với mỗi vùng chữ trả về `;
-const BOX_RULE = 'box_2d = [ymin, xmin, ymax, xmax] chuẩn hóa 0-1000 theo kích thước ảnh, bao kín vùng chữ gốc. Thứ tự theo thứ tự đọc.';
+// Geometry spelled out because gateways serve many model families that were never trained on box_2d:
+// without the origin/scale they answer on pixels or a 0-100 percent scale, and without the one-box-per-
+// bubble rule they merge neighbouring bubbles. The worked example anchors the convention for them:
+// gpt-5.6-sol via a gateway, 4 runs on the truth-scored page: 71% bubbles hit (1/4 passes) with the old
+// one-liner, 86% (3/4 passes) with this; gemini-3.1-flash-lite stays at its documented 86-93%.
+// Style rules stay out (they cost box accuracy, see below); only these geometry lines are measured safe.
+const BOX_RULE = 'box_2d = [ymin, xmin, ymax, xmax] — 4 số nguyên 0-1000 theo khung ảnh: (0,0) là góc trên trái, 1000 là mép dưới/phải; ymin/ymax tính từ mép trên, xmin/xmax tính từ mép trái. Mỗi bong bóng/khung một ô riêng, ôm sát khối chữ gốc trong đó — không ôm cả khung truyện, không tràn sang vùng chữ khác. Ví dụ: bong bóng có chữ nằm ở nửa trên bên trái, chiếm khoảng nửa chiều rộng ảnh thì box_2d vào khoảng [100, 50, 300, 500]. Thứ tự theo thứ tự đọc.';
 
 // box_2d [ymin, xmin, ymax, xmax] on a 0-1000 scale is the box format Gemini is trained on (per Google's
 // image-understanding docs); free-form x/y/w/h percentages came back misplaced on a real page.
@@ -145,10 +151,15 @@ async function testImage() {
 function parseBubbles(text) {
   const { bubbles } = JSON.parse(text.replace(/^\s*```(?:json)?|```\s*$/g, '')); // some models wrap JSON in fences
   if (!Array.isArray(bubbles)) throw new Error('Model trả JSON sai định dạng.');
+  // A model that answered on a 0-100 percent scale despite the prompt would have every box clamped into
+  // the top-left corner; all coordinates <= 100 gives it away (a full manga page never keeps every bubble
+  // there). Rescale the whole answer instead of clamping it.
+  const vals = bubbles.flatMap((o) => (Array.isArray(o.box_2d) && o.box_2d.length === 4) ? o.box_2d : []);
+  const x10 = vals.length && vals.every((v) => Number.isFinite(v) && v >= -10 && v <= 100) ? 10 : 1;
   // box_2d (0-1000) -> x/y/w/h in % for the page overlay. Values far outside 0-1000 mean the model used
   // another scale (e.g. pixels): drop the box instead of clamping it into a page-covering white block.
   // A box over 25% of the page is never one speech bubble (largest on the test page is ~3.4%).
-  const c = (v) => Math.min(1000, Math.max(0, v)) / 10;
+  const c = (v) => Math.min(1000, Math.max(0, v * x10)) / 10;
   return bubbles.flatMap(({ box_2d: b, text: t, src }) => {
     if (!t?.trim() || !Array.isArray(b) || b.length !== 4 || !b.every((v) => Number.isFinite(v) && v >= -10 && v <= 1010)) return [];
     const [y0, x0, y1, x1] = [c(Math.min(b[0], b[2])), c(Math.min(b[1], b[3])), c(Math.max(b[0], b[2])), c(Math.max(b[1], b[3]))];
@@ -278,7 +289,7 @@ function anyIds(j, stripModelsPrefix) {
 }
 
 // A provider talking to `base` (user setting) instead of its default. Only http(s) URLs are accepted.
-// A gateway/proxy behind a custom base (e.g. gatecheap.vn/v1) lists models without the vendor-specific
+// A gateway/proxy behind a custom base lists models without the vendor-specific
 // fields our filters need (capabilities, supportedGenerationMethods, pricing…), and may serve other
 // vendors' models too, so its list is read with anyIds() and nothing is filtered: probe() decides.
 function providerFor(id, base) {

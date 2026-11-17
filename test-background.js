@@ -60,14 +60,14 @@ const call = (msg) => new Promise((res) => listener(msg, null, res));
     assert.match((await call({ type: 'models', provider: 'openai', key: 'k', base: 'not a url' })).error, /không hợp lệ/);
     assert.equal(seen.length, n, 'rejected URLs are never fetched');
 
-    // real gateway list (gatecheap.vn/v1/models, OpenAI shape, no `created`): every provider family
+    // a real gateway's model list (OpenAI shape, no `created`): every provider family
     // must list all of it — before, OpenAI kept only gpt-*, Anthropic returned [], Gemini threw
     const gw = JSON.parse(fs.readFileSync(__dirname + '/test-fixtures/gateway-models.json', 'utf8'));
     const want = gw.data.map((m) => m.id);
     const auth = {};
     ctx.fetch = async (url, init) => { auth[url] = init.headers; return { ok: true, json: async () => gw }; };
     for (const p of ['openai', 'anthropic', 'gemini', 'groq', 'openrouter', 'custom']) {
-      const res = await call({ type: 'models', provider: p, key: 'K', base: 'https://gatecheap.vn/v1' });
+      const res = await call({ type: 'models', provider: p, key: 'K', base: 'https://gateway.example/v1' });
       assert.deepEqual(res.list, want, p + ' via gateway');
     }
     // the family's own auth header is still sent
@@ -83,8 +83,8 @@ const call = (msg) => new Promise((res) => listener(msg, null, res));
     assert.deepEqual(await shape({ unexpected: true }), []);
     // bare host: 404 HTML page -> hint to add /v1; a base already ending in /v1 gets no hint
     ctx.fetch = async () => ({ ok: false, status: 404, json: async () => { throw new SyntaxError('html'); } });
-    assert.match((await call({ type: 'models', provider: 'custom', key: '', base: 'https://gatecheap.vn' })).error, /thêm \/v1.*gatecheap\.vn\/v1/);
-    assert.doesNotMatch((await call({ type: 'models', provider: 'custom', key: '', base: 'https://gatecheap.vn/v1' })).error, /thêm \/v1/);
+    assert.match((await call({ type: 'models', provider: 'custom', key: '', base: 'https://gateway.example' })).error, /thêm \/v1.*gateway\.example\/v1/);
+    assert.doesNotMatch((await call({ type: 'models', provider: 'custom', key: '', base: 'https://gateway.example/v1' })).error, /thêm \/v1/);
     ctx.fetch = f0;
   }
 
@@ -122,10 +122,11 @@ const call = (msg) => new Promise((res) => listener(msg, null, res));
     console.log('openrouter real list:', list.length, 'models,', firstPaid, 'free first:', list.slice(0, firstPaid).join(', '));
   }
 
-  // translate path: fenced JSON from an OpenAI-compatible model still parses
+  // translate path: fenced JSON from an OpenAI-compatible model still parses (values here must stay on the
+  // 0-1000 scale with some > 100, or the 0-100 rescale in parseBubbles would kick in)
   store = { provider: 'openrouter', keys: { openrouter: 'k' }, models: { openrouter: 'x/y' } };
-  replies = { 'https://openrouter.ai': { choices: [{ message: { content: '```json\n{"bubbles":[{"box_2d":[20,10,60,40],"text":"Chào"}]}\n```' } }] } };
-  assert.deepEqual({ ...(await call({ type: 'translate', data: 'AA', mime: 'image/jpeg' })).bubbles[0] }, { x: 1, y: 2, w: 3, h: 4, text: 'Chào' });
+  replies = { 'https://openrouter.ai': { choices: [{ message: { content: '```json\n{"bubbles":[{"box_2d":[200,100,600,400],"text":"Chào"}]}\n```' } }] } };
+  assert.deepEqual({ ...(await call({ type: 'translate', data: 'AA', mime: 'image/jpeg' })).bubbles[0] }, { x: 10, y: 20, w: 30, h: 40, text: 'Chào' });
 
   // box_2d conversion: swapped corners fixed, out-of-range clamped, malformed dropped
   const parse = vm.runInContext('parseBubbles', ctx);
@@ -139,6 +140,17 @@ const call = (msg) => new Promise((res) => listener(msg, null, res));
     { box_2d: [100, 100, 200, 200], text: '   ' }, // blank text
   ] }));
   assert.deepEqual(JSON.parse(JSON.stringify(out)), [{ x: 90, y: 50, w: 10, h: 10, text: 'a' }]);
+
+  // every box on a 0-100 percent scale (a gateway model ignoring the prompt) is rescaled ×10, not clamped
+  // into the top-left corner
+  const p100 = parse(JSON.stringify({ bubbles: [
+    { box_2d: [10, 20, 30, 40], text: 'một' },
+    { box_2d: [50, 60, 70, 80], text: 'hai' },
+  ] }));
+  assert.deepEqual(JSON.parse(JSON.stringify(p100)), [
+    { x: 20, y: 10, w: 20, h: 20, text: 'một' },
+    { x: 60, y: 50, w: 20, h: 20, text: 'hai' },
+  ]);
 
   // cache: same image + same model is answered from storage; a different image or model calls the API
   fetches = 0;

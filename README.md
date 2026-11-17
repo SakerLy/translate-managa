@@ -87,7 +87,7 @@ Mỗi nhà cung cấp có ô **Base URL**. Để trống thì dùng địa chỉ
 | LM Studio | `http://localhost:1234/v1` |
 | Gemini (cổng tương thích OpenAI) | `https://generativelanguage.googleapis.com/v1beta/openai` |
 
-**Cổng trung gian bán API nhiều hãng** (ví dụ `https://gatecheap.vn/v1`) thường nói theo chuẩn OpenAI cho mọi model, kể cả Claude và Gemini, nên hãy chọn **Tùy chỉnh** thay vì Anthropic hay Gemini. Khi Base URL khác mặc định, danh sách model được đọc nguyên văn, không lọc, và bước gọi thử sẽ quyết định model nào dùng được. Nếu bạn quên `/v1` ở cuối, popup sẽ gợi ý thêm vào.
+**Cổng trung gian bán API nhiều hãng** thường nói theo chuẩn OpenAI cho mọi model, kể cả Claude và Gemini, nên hãy chọn **Tùy chỉnh** thay vì Anthropic hay Gemini. Khi Base URL khác mặc định, danh sách model được đọc nguyên văn, không lọc, và bước gọi thử sẽ quyết định model nào dùng được. Nếu bạn quên `/v1` ở cuối, popup sẽ gợi ý thêm vào.
 
 Chỉ chấp nhận địa chỉ `http://` hoặc `https://`. API key được gửi tới đúng Base URL bạn nhập, nên chỉ dùng địa chỉ bạn tin tưởng. Cổng tương thích OpenAI của Gemini đã được test thật (lấy danh sách model, gọi thử đạt); Ollama và LM Studio chưa được test.
 
@@ -211,6 +211,7 @@ manga-dich/                 thư mục extension (Load unpacked thư mục này)
 test-background.js          Test unit (không gọi mạng)
 test-fit.js                 Đo fit.js trên điểm ảnh thật: chữ gốc được che, phần lấn ra tranh
 test-live.js                Test thật: dịch 1 trang, chấm vị trí ô dịch theo đáp án
+test-ab.js                  Test thật chạy lặp N lần một model để so sánh prompt (A/B)
 test-probe.js               Test thật bước gọi thử model của popup
 test-polish.js              Test thật bước trau chuốt văn phong
 test-tokens.js              Đo token thật theo kích thước ảnh
@@ -240,10 +241,25 @@ OPENROUTER_API_KEY=...
 GROQ_API_KEY=...
 ```
 
+Cổng trung gian qua nhà cung cấp **Tùy chỉnh** thì thêm hai dòng (test-live/test-ab sẽ gọi đúng Base URL đó):
+
+```
+CUSTOM_API_KEY=...
+CUSTOM_BASE_URL=https://ten-cung-trung-gian/v1
+```
+
 Ảnh trang truyện dùng để test **không có trong repo** vì thuộc bản quyền của tác giả và nhóm dịch. Hãy tự lưu một trang thành `test-fixtures/page4.png`. File đáp án `page4.truth.json` khớp với trang 4, chương 12 của *Bijin de Okane Mochi no Kanojo ga Hoshii to Ittara…* trên MangaDex (ảnh 768×1087). Nếu dùng trang khác, hãy tự đo lại đáp án rồi kiểm tra bằng `draw-boxes.py`.
 
 ```bash
 node test-live.js test-fixtures/page4.png
+```
+
+So sánh hai phiên bản prompt (mỗi phiên bản chạy vài lần rồi lấy trung bình, vì model trả về hơi khác nhau mỗi lần; `BG` trỏ tới file background.js cũ):
+
+```bash
+git show HEAD:manga-dich/background.js > "$TEMP/bg-cu.js"
+BG="$TEMP/bg-cu.js" node test-ab.js gpt-5.6-sol 4   # bản cũ
+node test-ab.js gpt-5.6-sol 4                       # bản hiện tại
 ```
 
 ```bash
