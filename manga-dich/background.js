@@ -69,9 +69,10 @@ const POLISH_JOB = {
 async function polish(provider, key, model, bubbles, context, glossary = '') {
   if (!bubbles.length) return { bubbles, glossary };
   try {
+    const P = typeof provider === 'string' ? PROVIDERS[provider] : provider; // id (default URL) or providerFor()
     const prompt = (glossary ? `BẢNG XƯNG HÔ:\n${glossary}\n\n` : '') + (context ? `Lời thoại trang trước:\n${context}\n\n` : '')
       + 'Các bong bóng:\n' + JSON.stringify(bubbles.map((b) => ({ src: b.src || '', draft: b.text })));
-    const raw = await PROVIDERS[provider].translate(key, model, null, prompt, undefined, POLISH_JOB);
+    const raw = await P.translate(key, model, null, prompt, undefined, POLISH_JOB);
     const out = JSON.parse(raw.replace(/^\s*```(?:json)?|```\s*$/g, ''));
     const g = typeof out.glossary === 'string' && out.glossary.trim() ? out.glossary.trim().slice(0, 1500) : glossary; // cap: it rides in every later prompt
     const { lines } = out;
@@ -156,8 +157,8 @@ function parseBubbles(text) {
   });
 }
 
-async function probe({ provider, key, model }) {
-  const bubbles = parseBubbles(await PROVIDERS[provider].translate(key, model, await testImage(), 'Đây là trang đầu tiên.', PROBE_TIMEOUT_S));
+async function probe({ provider, key, model, base }) {
+  const bubbles = parseBubbles(await providerFor(provider, base).translate(key, model, await testImage(), 'Đây là trang đầu tiên.', PROBE_TIMEOUT_S));
   if (!bubbles.length) throw new Error('Model không đọc được chữ trong ảnh thử.');
   // every probe bubble must get a box whose centre lands inside it
   const hit = ([cx, cy, rx, ry]) => bubbles.some((b) => {
@@ -168,15 +169,18 @@ async function probe({ provider, key, model }) {
   return bubbles.map((b) => b.text).join(' / ');
 }
 
-// OpenAI, OpenRouter: same chat-completions wire format, only base URL, model filter and extras differ.
-// rank(m): lower sorts first (e.g. free models before paid); ties go newest first.
+// OpenAI, OpenRouter, Groq, custom: same chat-completions wire format, only base URL, model filter and
+// extras differ. rank(m): lower sorts first (e.g. free models before paid); ties go newest first.
+// Every provider reads its endpoint from this.base so the user can point it elsewhere (providerFor).
+const bearer = (key) => (key ? { authorization: `Bearer ${key}` } : {}); // local servers (Ollama…) need no key
 const openaiCompat = (base, keep, extra = () => ({}), rank = () => 0) => ({
+  base,
   async models(key) {
-    const { data } = await api(`${base}/models`, { headers: { authorization: `Bearer ${key}` } });
+    const { data } = await api(`${this.base}/models`, { headers: bearer(key) });
     return data.filter(keep).sort((a, b) => rank(a) - rank(b) || (b.created ?? 0) - (a.created ?? 0)).map((m) => m.id);
   },
   async translate(key, model, img, prompt, timeoutS, job = PAGE_JOB) {
-    const body = await api(`${base}/chat/completions`, json({ authorization: `Bearer ${key}` }, {
+    const body = await api(`${this.base}/chat/completions`, json(bearer(key), {
       model,
       messages: [
         { role: 'system', content: job.system },
@@ -197,13 +201,14 @@ const geminiVer = (id) => parseFloat(id.match(/^gemini-(\d+(?:\.\d+)?)/)?.[1] ??
 
 const PROVIDERS = {
   anthropic: {
+    base: 'https://api.anthropic.com/v1',
     async models(key) {
-      const { data } = await api('https://api.anthropic.com/v1/models?limit=1000', { headers: anthropicHeaders(key) });
+      const { data } = await api(`${this.base}/models?limit=1000`, { headers: anthropicHeaders(key) });
       // API lists newest first and reports capabilities per model
       return data.filter((m) => m.capabilities?.image_input?.supported && m.capabilities?.structured_outputs?.supported).map((m) => m.id);
     },
     async translate(key, model, img, prompt, timeoutS, job = PAGE_JOB) {
-      const body = await api('https://api.anthropic.com/v1/messages', json(
+      const body = await api(`${this.base}/messages`, json(
         anthropicHeaders(key),
         {
           model,
@@ -223,8 +228,9 @@ const PROVIDERS = {
   openai: openaiCompat('https://api.openai.com/v1', (m) =>
     /^(gpt-|o\d|chatgpt)/.test(m.id) && !/audio|realtime|tts|transcribe|image|search|embedding|instruct|moderation/.test(m.id)),
   gemini: {
+    base: 'https://generativelanguage.googleapis.com/v1beta',
     async models(key) {
-      const { models } = await api('https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000', { headers: { 'x-goog-api-key': key } });
+      const { models } = await api(`${this.base}/models?pageSize=1000`, { headers: { 'x-goog-api-key': key } });
       // No image-input or date field in Gemini's model list: keep generateContent models, order by the
       // version in the name; probe() decides which actually work.
       return models
@@ -234,7 +240,7 @@ const PROVIDERS = {
         .sort((a, b) => geminiVer(b) - geminiVer(a) || a.localeCompare(b));
     },
     async translate(key, model, img, prompt, timeoutS, job = PAGE_JOB) {
-      const body = await api(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, json({ 'x-goog-api-key': key }, {
+      const body = await api(`${this.base}/models/${model}:generateContent`, json({ 'x-goog-api-key': key }, {
         systemInstruction: { parts: [{ text: job.system }] },
         contents: [{ role: 'user', parts: [...(img ? [{ inlineData: { mimeType: img.mime, data: img.data } }] : []), { text: prompt }] }],
         generationConfig: { responseMimeType: 'application/json', responseJsonSchema: job.schema },
@@ -256,7 +262,24 @@ const PROVIDERS = {
     && !m.id.endsWith(':batch'), (model) => ({ max_tokens: model.endsWith(':free') ? 16000 : 4096 }),
     // free first: priced at 0 per the model list itself (also catches openrouter/free, which has no :free suffix)
     (m) => (+m.pricing?.prompt === 0 && +m.pricing?.completion === 0 ? 0 : 1)),
+  // Any OpenAI-compatible server the user points at (Ollama, LM Studio, vLLM, a proxy…). No default URL.
+  custom: openaiCompat('', () => true, () => ({ max_tokens: 4096 })),
 };
+
+// A provider talking to `base` (user setting) instead of its default. Only http(s) URLs are accepted.
+function providerFor(id, base) {
+  const P = PROVIDERS[id];
+  if (!P) throw new Error('Nhà cung cấp không hợp lệ: ' + id);
+  const b = String(base || '').trim().replace(/\/+$/, '');
+  if (!b) {
+    if (!P.base) throw new Error('Chưa nhập Base URL cho nhà cung cấp tùy chỉnh.');
+    return P;
+  }
+  let u;
+  try { u = new URL(b); } catch { throw new Error('Base URL không hợp lệ: ' + b); }
+  if (u.protocol !== 'https:' && u.protocol !== 'http:') throw new Error('Base URL phải bắt đầu bằng http:// hoặc https://');
+  return Object.create(P, { base: { value: b } });
+}
 
 // Cache by image content + model: MangaDex recreates <img> tags for pages you go back to, and F5 reloads
 // them, so without this the same page is paid for again. Entries are ~1-2 KB; keep the newest CACHE_MAX.
@@ -277,19 +300,20 @@ async function cachePut(key, bubbles) {
 // Returns { bubbles, glossary }. glossary (pronoun pairs for this tab) only changes when polish runs.
 async function translate({ data, mime, url, context, glossary = '' }) {
   if (!data) ({ data, mime } = await fetchImage(url));
-  const { provider = 'anthropic', keys = {}, models = {}, polish: doPolish = true } = await chrome.storage.local.get(['provider', 'keys', 'models', 'polish']);
-  if (!keys[provider] || !models[provider]) throw new Error('Chưa nhập API key / chọn model (bấm icon extension).');
+  const { provider = 'anthropic', keys = {}, models = {}, bases = {}, polish: doPolish = true } = await chrome.storage.local.get(['provider', 'keys', 'models', 'bases', 'polish']);
+  if ((!keys[provider] && provider !== 'custom') || !models[provider]) throw new Error('Chưa nhập API key / chọn model (bấm icon extension).');
+  const P = providerFor(provider, bases[provider]);
   const key = await cacheKey(models[provider] + (doPolish ? '+p' : ''), data);
   const hit = (await chrome.storage.local.get(key))[key];
   if (hit) return { bubbles: hit.bubbles, glossary }; // same page already translated by this model: no API call
   const prompt = context ? `Lời thoại trang trước (giữ xưng hô nhất quán):\n${context}` : 'Đây là trang đầu tiên.';
-  let bubbles = parseBubbles(await PROVIDERS[provider].translate(keys[provider], models[provider], { data, mime }, prompt, undefined, pageJob(doPolish)));
+  let bubbles = parseBubbles(await P.translate(keys[provider], models[provider], { data, mime }, prompt, undefined, pageJob(doPolish)));
   if (doPolish) {
     const before = glossary;
-    ({ bubbles, glossary } = await polish(provider, keys[provider], models[provider], bubbles, context, glossary));
+    ({ bubbles, glossary } = await polish(P, keys[provider], models[provider], bubbles, context, glossary));
     // This page just added pronoun pairs: polish it once more under them, so it follows its own decision.
     // (gemini-3.1-flash-lite, real page, 3 runs: 1-2 mixed lines left after one pass, 0 after this.)
-    if (glossary !== before) ({ bubbles, glossary } = await polish(provider, keys[provider], models[provider], bubbles, context, glossary));
+    if (glossary !== before) ({ bubbles, glossary } = await polish(P, keys[provider], models[provider], bubbles, context, glossary));
   }
   await cachePut(key, bubbles);
   return { bubbles, glossary };
@@ -297,8 +321,9 @@ async function translate({ data, mime, url, context, glossary = '' }) {
 
 chrome.runtime.onMessage.addListener((msg, _sender, send) => {
   const job = msg.type === 'translate' ? translate(msg)
-    : msg.type === 'models' ? PROVIDERS[msg.provider].models(msg.key).then((list) => ({ list }))
+    : msg.type === 'models' ? Promise.resolve().then(() => providerFor(msg.provider, msg.base).models(msg.key)).then((list) => ({ list }))
     : msg.type === 'probe' ? probe(msg).then((sample) => ({ sample }))
+    : msg.type === 'defaults' ? Promise.resolve({ bases: Object.fromEntries(Object.entries(PROVIDERS).map(([k, p]) => [k, p.base])) })
     : null;
   if (!job) return;
   job.then(send, (e) => send({ error: String(e.message || e) }));

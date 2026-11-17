@@ -1,26 +1,125 @@
 <!doctype html>
+<html lang="vi">
 <meta charset="utf-8">
+<title>Manga Dịch</title>
 <style>
-  body { width: 280px; font: 13px "Segoe UI", sans-serif; margin: 12px; }
-  input, button, select { width: 100%; box-sizing: border-box; padding: 6px; margin: 4px 0 8px; }
-  #go { background: #ff6740; color: #fff; border: 0; font-weight: 600; padding: 9px; }
-  #msg { color: #444; min-height: 1em; white-space: pre-wrap; word-break: break-word; }
+  :root {
+    --bg: #ffffff; --surface: #f5f5f7; --border: #dcdce0; --text: #1c1c1f; --muted: #6b6b73;
+    --accent: #ff6740; --accent-text: #ffffff; --ok: #1f8a4c; --err: #c4321c; --focus: #ff674055;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1c1c1f; --surface: #26262b; --border: #3a3a41; --text: #ececf0; --muted: #a0a0aa; --ok: #4cc283; --err: #ff7a66; }
+  }
+  * { box-sizing: border-box; }
+  body { width: 360px; margin: 0; background: var(--bg); color: var(--text); font: 13px/1.45 "Segoe UI", system-ui, sans-serif; }
+  header { display: flex; align-items: center; gap: 10px; padding: 14px 16px 10px; }
+  .logo { width: 30px; height: 30px; border-radius: 8px; background: var(--accent); color: var(--accent-text);
+    display: grid; place-items: center; font-weight: 700; font-size: 13px; letter-spacing: -0.5px; }
+  header h1 { font-size: 15px; margin: 0; flex: 1; }
+  .pill { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--surface); color: var(--muted); border: 1px solid var(--border); }
+  .pill.ready { color: var(--ok); border-color: currentColor; }
+  main { padding: 0 16px 14px; }
+  .primary { width: 100%; padding: 10px; border: 0; border-radius: 8px; background: var(--accent); color: var(--accent-text);
+    font: 600 14px "Segoe UI", system-ui, sans-serif; cursor: pointer; }
+  .primary:disabled { opacity: .45; cursor: not-allowed; }
+  .hint { color: var(--muted); font-size: 12px; margin: 6px 0 0; }
+  section { margin-top: 14px; padding: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+  section h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 10px; }
+  .field { margin-bottom: 10px; }
+  .field > label { display: flex; justify-content: space-between; align-items: baseline; font-weight: 600; margin-bottom: 4px; }
+  .field > label a { font-weight: 400; font-size: 12px; color: var(--accent); text-decoration: none; }
+  input, select { width: 100%; padding: 7px 9px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font: inherit; }
+  input:focus, select:focus, button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+  .with-btn { display: flex; gap: 6px; }
+  .with-btn input { flex: 1; min-width: 0; }
+  .icon-btn { flex: none; padding: 0 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); cursor: pointer; font: inherit; }
+  .secondary { width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font: 600 13px "Segoe UI", system-ui, sans-serif; cursor: pointer; }
+  .switch { display: flex; align-items: center; gap: 10px; cursor: pointer; position: relative; }
+  /* real checkbox stays focusable/announced, just invisible; the track is drawn next to it
+     (::after on <input> rendered the knob in the wrong place in Chromium) */
+  .switch input { position: absolute; opacity: 0; width: 34px; height: 20px; margin: 0; }
+  .track { flex: none; width: 34px; height: 20px; border-radius: 999px; background: var(--border); position: relative; transition: background .15s; }
+  .track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .15s; }
+  .switch input:checked + .track { background: var(--accent); }
+  .switch input:checked + .track::after { transform: translateX(14px); }
+  .switch input:focus-visible + .track { outline: 2px solid var(--focus); outline-offset: 1px; }
+  .switch small { display: block; color: var(--muted); font-weight: 400; }
+  #msg { margin-top: 10px; min-height: 1.4em; white-space: pre-wrap; word-break: break-word; }
+  #msg.ok { color: var(--ok); } #msg.err { color: var(--err); }
+  details { margin-top: 8px; }
+  summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+  #results { margin: 6px 0 0; padding: 0; list-style: none; font-size: 12px; max-height: 150px; overflow: auto; }
+  #results li { padding: 3px 0; border-bottom: 1px solid var(--border); word-break: break-word; }
+  #results .ok { color: var(--ok); } #results .err { color: var(--err); }
+  footer { padding: 0 16px 12px; color: var(--muted); font-size: 11px; display: flex; justify-content: space-between; }
+  footer a { color: inherit; }
 </style>
-<label for="provider">Nhà cung cấp AI</label>
-<select id="provider">
-  <option value="anthropic">Anthropic (Claude)</option>
-  <option value="openai">OpenAI (GPT)</option>
-  <option value="gemini">Google (Gemini)</option>
-  <option value="openrouter">OpenRouter (DeepSeek, Grok, Qwen…)</option>
-  <option value="groq">Groq (có gói miễn phí)</option>
-</select>
-<label for="key">API key</label>
-<input id="key" type="password" placeholder="Dán API key">
-<button id="save">Lưu key & tải model</button>
-<label for="model">Model (mới nhất ở trên cùng)</label>
-<select id="model"></select>
-<label style="display:flex;gap:6px;align-items:center;margin:4px 0 8px"><input type="checkbox" id="polish" style="width:auto;margin:0">Trau chuốt văn phong (thêm 1 lượt gọi chỉ có chữ)</label>
-<div id="msg"></div>
-<button id="go">Bật dịch tự động cho tab này</button>
-<div style="color:#666;font-size:12px">Dịch trang đang xem trước, rồi các trang kế tiếp; lật/cuộn tới đâu dịch tới đó. Bấm lại để thử lại trang bị lỗi.</div>
+
+<header>
+  <div class="logo" aria-hidden="true">MD</div>
+  <h1>Manga Dịch</h1>
+  <span class="pill" id="state">Chưa cài đặt</span>
+</header>
+
+<main>
+  <button class="primary" id="go" disabled>Bật dịch tự động cho tab này</button>
+  <p class="hint">Dịch trang đang xem trước, rồi các trang kế tiếp. Trang lỗi có nút Thử lại ngay trên trang.</p>
+
+  <section aria-labelledby="h-settings">
+    <h2 id="h-settings">Cài đặt</h2>
+
+    <div class="field">
+      <label for="provider">Nhà cung cấp AI</label>
+      <select id="provider">
+        <option value="gemini">Google Gemini (có gói miễn phí)</option>
+        <option value="openrouter">OpenRouter (nhiều model, có model miễn phí)</option>
+        <option value="groq">Groq (có gói miễn phí)</option>
+        <option value="anthropic">Anthropic Claude</option>
+        <option value="openai">OpenAI GPT</option>
+        <option value="custom">Tùy chỉnh (tương thích OpenAI)</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="key">API key <a id="getkey" href="#" target="_blank" rel="noopener">Lấy key</a></label>
+      <div class="with-btn">
+        <input id="key" type="password" placeholder="Dán API key" autocomplete="off" spellcheck="false">
+        <button class="icon-btn" id="eye" type="button" aria-label="Hiện key">Hiện</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="base">Base URL</label>
+      <input id="base" type="url" spellcheck="false" autocomplete="off">
+      <p class="hint" id="base-hint"></p>
+    </div>
+
+    <button class="secondary" id="save">Lưu và tìm model</button>
+
+    <div class="field" style="margin-top:10px">
+      <label for="model">Model</label>
+      <input id="model" list="models" placeholder="Chọn hoặc gõ tên model" spellcheck="false" autocomplete="off">
+      <datalist id="models"></datalist>
+    </div>
+
+    <label class="switch">
+      <input type="checkbox" id="polish">
+      <span class="track" aria-hidden="true"></span>
+      <span>Trau chuốt văn phong<small>Thêm 1 lượt gọi chỉ có chữ; giữ xưng hô nhất quán</small></span>
+    </label>
+
+    <div id="msg" role="status"></div>
+    <details id="details" hidden>
+      <summary id="summary">Kết quả gọi thử</summary>
+      <ul id="results"></ul>
+    </details>
+  </section>
+</main>
+
+<footer>
+  <span>Key chỉ lưu trên máy bạn</span>
+  <a href="https://github.com/SakerLy/translate-managa" target="_blank" rel="noopener">GitHub</a>
+</footer>
+
 <script src="popup.js"></script>
+</html>

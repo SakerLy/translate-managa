@@ -29,6 +29,7 @@
 - **Không trả tiền hai lần.** Trang đã dịch được lưu theo nội dung ảnh, nên quay lại hay tải lại trang (F5) không tốn thêm token.
 - **Tự chọn model.** Popup gọi thử thật từng model bằng một ảnh có 2 bong bóng ở vị trí biết trước, rồi chọn model nhanh nhất trong số đọc đúng chữ và đặt đúng ô.
 - **Dùng miễn phí được** với gói free của Gemini, Groq, hoặc các model miễn phí trên OpenRouter (được xếp lên đầu danh sách).
+- **Base URL tùy chỉnh** cho mọi nhà cung cấp (proxy, cổng trung gian), và nhà cung cấp **Tùy chỉnh** cho mọi server tương thích OpenAI: Ollama, LM Studio, vLLM… chạy ngay trên máy bạn.
 
 <br clear="right">
 
@@ -55,9 +56,9 @@
 ## Sử dụng
 
 1. Bấm icon **Manga Dịch** trên thanh công cụ.
-2. Chọn **nhà cung cấp AI**, dán **API key**, rồi bấm **Lưu key & tải model**.
-   Lần đầu popup gọi thử các model (mất khoảng 10 giây tới 2 phút), sau đó tự chọn model tốt nhất. Bạn có thể đổi model khác trong danh sách, và model đó cũng được gọi thử trước khi lưu.
-3. Mở chương truyện, chờ ảnh tải xong, rồi bấm **Bật dịch tự động cho tab này**.
+2. Trong khối **Cài đặt**: chọn **nhà cung cấp AI**, dán **API key** (link **Lấy key** dẫn tới trang tạo key), rồi bấm **Lưu và tìm model**.
+   Popup gọi thử các model (mất khoảng 10 giây tới 2 phút), sau đó tự chọn model tốt nhất và chuyển nhãn sang **Sẵn sàng**. Bạn có thể chọn model khác trong ô **Model** hoặc tự gõ tên model; model đó cũng được gọi thử trước khi lưu.
+3. Mở chương truyện, chờ ảnh tải xong, rồi bấm **Bật dịch tự động cho tab này** (nút chỉ bật khi đã cài đặt xong).
 4. Đọc bình thường. Góc mỗi trang hiện `Đang dịch… 5s` trong lúc chờ. Trang nào lỗi sẽ có nút **Thử lại** ngay trên trang.
 
 > [!TIP]
@@ -74,6 +75,19 @@
 | **Groq** | [console.groq.com/keys](https://console.groq.com/keys) | Có gói miễn phí. Model đọc ảnh theo tài liệu của Groq: `qwen/qwen3.8-27b`. *Chưa được test với key thật.* |
 | **Anthropic** (Claude) | [console.anthropic.com](https://console.anthropic.com) | Trả phí |
 | **OpenAI** (GPT) | [platform.openai.com](https://platform.openai.com) | Trả phí |
+| **Tùy chỉnh** (tương thích OpenAI) | Tùy server | Server chạy trên máy (Ollama, LM Studio…) miễn phí và không cần key. Cần model đọc được ảnh và hỗ trợ JSON schema; bước gọi thử sẽ kiểm tra. |
+
+### Base URL
+
+Mỗi nhà cung cấp có ô **Base URL**. Để trống thì dùng địa chỉ mặc định (hiện mờ trong ô); chỉ điền khi đi qua proxy hoặc cổng trung gian. Với **Tùy chỉnh**, Base URL là bắt buộc:
+
+| Server | Base URL |
+|---|---|
+| Ollama | `http://localhost:11434/v1` |
+| LM Studio | `http://localhost:1234/v1` |
+| Gemini (cổng tương thích OpenAI) | `https://generativelanguage.googleapis.com/v1beta/openai` |
+
+Chỉ chấp nhận địa chỉ `http://` hoặc `https://`. API key được gửi tới đúng Base URL bạn nhập, nên chỉ dùng địa chỉ bạn tin tưởng. Cổng tương thích OpenAI của Gemini đã được test thật (lấy danh sách model, gọi thử đạt); Ollama và LM Studio chưa được test.
 
 <details>
 <summary><b>Kết quả đo thật của từng model</b></summary>
@@ -134,7 +148,7 @@ flowchart LR
 
 ## Quyền riêng tư
 
-- API key chỉ lưu trên máy bạn (`chrome.storage.local`) và chỉ được gửi tới nhà cung cấp bạn chọn.
+- API key chỉ lưu trên máy bạn (`chrome.storage.local`) và chỉ được gửi tới nhà cung cấp bạn chọn (hoặc Base URL bạn nhập).
 - Ảnh trang truyện được gửi tới nhà cung cấp AI đó để dịch. Việc lưu dữ liệu tuân theo điều khoản của nhà cung cấp.
 - Extension không có máy chủ riêng và không thu thập dữ liệu gì.
 
@@ -169,7 +183,7 @@ Hãy bật **Trau chuốt văn phong**: bảng xưng hô chỉ hoạt động kh
 <details>
 <summary><b>Có hỗ trợ xAI (Grok) hay Mistral không?</b></summary>
 
-Chưa có API riêng. Tài liệu hiện tại của hai hãng chưa xác nhận đủ cách gửi ảnh và JSON theo schema để hỗ trợ chắc chắn. Bạn vẫn dùng được các model Grok, Mistral… qua **OpenRouter**.
+Chưa có mục riêng, vì tài liệu hiện tại của hai hãng chưa xác nhận đủ cách gửi ảnh và JSON theo schema. Bạn dùng được các model Grok, Mistral… qua **OpenRouter**, hoặc thử nhà cung cấp **Tùy chỉnh** với Base URL tương thích OpenAI của hãng (chưa được test; bước gọi thử sẽ cho biết có chạy hay không).
 </details>
 
 <details>
@@ -188,10 +202,10 @@ Chỉ dịch khi SFX ngắn và có nghĩa với cảnh. Ảnh hiển thị nh�
 ```
 manga-dich/                 thư mục extension (Load unpacked thư mục này)
 ├── manifest.json           Manifest V3
-├── background.js           Gọi API các nhà cung cấp, trau chuốt, bảng xưng hô, bộ nhớ đệm, gọi thử model
+├── background.js           Gọi API các nhà cung cấp (theo Base URL), trau chuốt, bảng xưng hô, bộ nhớ đệm, gọi thử model
 ├── content.js              Chọn trang cần dịch, mã hóa ảnh, vẽ lớp bản dịch, nút Thử lại
 ├── fit.js                  Khớp ô dịch vào bong bóng theo điểm ảnh, lấy màu nền
-└── popup.html / popup.js   Chọn nhà cung cấp, key, model, bật/tắt trau chuốt
+└── popup.html / popup.js   Cài đặt: nhà cung cấp, key, Base URL, model, trau chuốt (có chế độ tối)
 test-background.js          Test unit (không gọi mạng)
 test-fit.js                 Đo fit.js trên điểm ảnh thật: chữ gốc được che, phần lấn ra tranh
 test-live.js                Test thật: dịch 1 trang, chấm vị trí ô dịch theo đáp án

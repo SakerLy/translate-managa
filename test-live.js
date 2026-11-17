@@ -21,7 +21,7 @@ const truth = fs.existsSync(truthFile) ? JSON.parse(fs.readFileSync(truthFile, '
 
 const ENV = { anthropic: 'ANTHROPIC_API_KEY', openai: 'OPENAI_API_KEY', gemini: 'GEMINI_API_KEY', openrouter: 'OPENROUTER_API_KEY', groq: 'GROQ_API_KEY' };
 let listener;
-const ctx = { fetch, btoa, AbortSignal, chrome: { runtime: { onMessage: { addListener: (f) => (listener = f) } } } };
+const ctx = { fetch, btoa, AbortSignal, URL, chrome: { runtime: { onMessage: { addListener: (f) => (listener = f) } } } };
 vm.createContext(ctx);
 vm.runInContext(fs.readFileSync(process.env.BG || path.join(__dirname, 'manga-dich/background.js'), 'utf8'), ctx); // BG=other.js to A/B a variant
 ctx.testImage = async () => page; // Node has no OffscreenCanvas: probe with the real page instead

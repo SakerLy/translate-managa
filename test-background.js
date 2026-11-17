@@ -9,7 +9,7 @@ const local = {
   remove: async (ks) => { for (const x of [].concat(ks)) delete store[x]; },
 };
 const ctx = {
-  AbortSignal, crypto, TextEncoder,
+  AbortSignal, crypto, TextEncoder, URL,
   btoa: (s) => Buffer.from(s, 'binary').toString('base64'),
   fetch: async (url) => {
     fetches++;
@@ -41,6 +41,26 @@ const call = (msg) => new Promise((res) => listener(msg, null, res));
   ] } };
   assert.deepEqual((await call({ type: 'models', provider: 'gemini', key: 'k' })).list,
     ['gemini-3-pro', 'gemini-3-pro-image', 'gemini-2.5-flash', 'gemini-flash-latest']);
+
+  // Base URL: user URL is used (trailing slash dropped), bad schemes rejected, custom needs a URL,
+  // and a key-less custom server gets no auth header
+  {
+    const seen = []; const f0 = ctx.fetch;
+    ctx.fetch = async (url, init) => { seen.push({ url, auth: init?.headers?.authorization }); return { ok: true, json: async () => ({ data: [{ id: 'gpt-9', created: 2 }, { id: 'llava', created: 1 }] }) }; };
+    let r = await call({ type: 'models', provider: 'openai', key: 'k', base: 'https://proxy.example.com/v1/' });
+    assert.deepEqual(r.list, ['gpt-9']); assert.equal(seen.at(-1).url, 'https://proxy.example.com/v1/models');
+    r = await call({ type: 'models', provider: 'openai', key: 'k', base: '' });
+    assert.equal(seen.at(-1).url, 'https://api.openai.com/v1/models', 'empty base = default URL');
+    r = await call({ type: 'models', provider: 'custom', key: '', base: 'http://localhost:11434/v1' });
+    assert.deepEqual(r.list, ['gpt-9', 'llava'], 'custom keeps every model'); assert.equal(seen.at(-1).url, 'http://localhost:11434/v1/models'); assert.equal(seen.at(-1).auth, undefined);
+    const n = seen.length;
+    assert.match((await call({ type: 'models', provider: 'custom', key: '', base: '' })).error, /Base URL/);
+    assert.match((await call({ type: 'models', provider: 'openai', key: 'k', base: 'file:///etc/passwd' })).error, /http/);
+    assert.match((await call({ type: 'models', provider: 'openai', key: 'k', base: 'javascript:alert(1)' })).error, /http/);
+    assert.match((await call({ type: 'models', provider: 'openai', key: 'k', base: 'not a url' })).error, /không hợp lệ/);
+    assert.equal(seen.length, n, 'rejected URLs are never fetched');
+    ctx.fetch = f0;
+  }
 
   // Groq: inactive models dropped, newest first (shape per Groq's API reference)
   replies = { 'https://api.groq.com/openai/v1/models': { data: [

@@ -9,7 +9,7 @@ const [provider, model, ...images] = process.argv.slice(2);
 const key = process.env[{ anthropic: 'ANTHROPIC_API_KEY', openai: 'OPENAI_API_KEY', gemini: 'GEMINI_API_KEY', openrouter: 'OPENROUTER_API_KEY', groq: 'GROQ_API_KEY' }[provider]];
 let usage;
 const ctx = {
-  btoa, AbortSignal, chrome: { runtime: { onMessage: { addListener() {} } } },
+  btoa, AbortSignal, URL, chrome: { runtime: { onMessage: { addListener() {} } } },
   // pass-through fetch that records the usage block of each response
   fetch: async (url, init) => {
     const r = await fetch(url, init); const j = await r.clone().json().catch(() => ({}));

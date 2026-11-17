@@ -8,7 +8,7 @@ const [provider, model, ...files] = process.argv.slice(2);
 const key = process.env[{ anthropic: 'ANTHROPIC_API_KEY', openai: 'OPENAI_API_KEY', gemini: 'GEMINI_API_KEY', openrouter: 'OPENROUTER_API_KEY', groq: 'GROQ_API_KEY' }[provider]];
 let usage;
 const ctx = {
-  btoa, AbortSignal, crypto, TextEncoder, chrome: { runtime: { onMessage: { addListener() {} } } },
+  btoa, AbortSignal, crypto, TextEncoder, URL, chrome: { runtime: { onMessage: { addListener() {} } } },
   fetch: async (url, init) => { const r = await fetch(url, init); const j = await r.clone().json().catch(() => ({})); usage = j.usageMetadata || j.usage; return r; },
 };
 vm.createContext(ctx);
