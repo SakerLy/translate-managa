@@ -9,7 +9,7 @@ const local = {
   remove: async (ks) => { for (const x of [].concat(ks)) delete store[x]; },
 };
 const ctx = {
-  AbortSignal, crypto, TextEncoder, URL,
+  AbortSignal, crypto, TextEncoder, URL, setTimeout, clearTimeout,
   btoa: (s) => Buffer.from(s, 'binary').toString('base64'),
   fetch: async (url) => {
     fetches++;
@@ -152,6 +152,13 @@ const call = (msg) => new Promise((res) => listener(msg, null, res));
     { x: 60, y: 50, w: 20, h: 20, text: 'hai' },
   ]);
 
+  // gateway envelopes: the array wrapped in the gateway's own body parses; a 200-wrapped gateway error
+  // surfaces the gateway's message instead of a vague shape error
+  const env = parse(JSON.stringify({ data: [{ box_2d: [100, 200, 300, 400], text: 'gói data' }] }));
+  assert.deepEqual(JSON.parse(JSON.stringify(env)), [{ x: 20, y: 10, w: 20, h: 20, text: 'gói data' }]);
+  const gw = (() => { try { parse('{"code":402,"msg":"số dư không đủ"}'); } catch (e) { return e.message; } return ''; })();
+  assert.match(gw, /số dư không đủ/);
+
   // cache: same image + same model is answered from storage; a different image or model calls the API
   fetches = 0;
   const again = await call({ type: 'translate', data: 'AA', mime: 'image/jpeg', context: 'other context' });
@@ -190,6 +197,37 @@ const call = (msg) => new Promise((res) => listener(msg, null, res));
 
   store = {};
   assert.match((await call({ type: 'translate', data: 'AA', mime: 'image/jpeg' })).error, /API key/);
+
+  // a page that comes back with zero boxes is a model flake: retried once (polish skips an empty page)
+  store = { provider: 'openrouter', keys: { openrouter: 'k' }, models: { openrouter: 'x/e' } };
+  fetches = 0;
+  replies = { 'https://openrouter.ai': { choices: [{ message: { content: '{"bubbles":[]}' } }] } };
+  await call({ type: 'translate', data: 'DD', mime: 'image/jpeg' });
+  assert.equal(fetches, 2, 'empty answer retried once: 2 page calls, polish skips an empty page');
+
+  // queue: two tabs requesting the same page make ONE set of API calls; a flaky first answer is retried
+  // before anyone sees an error; the finished result is served to both, and later calls hit the cache
+  vm.runInContext('Q_RETRY_MS = 5', ctx); // keep the retry backoff short for the test
+  store = { provider: 'openrouter', keys: { openrouter: 'k' }, models: { openrouter: 'x/q' } };
+  fetches = 0;
+  let qn = 0;
+  const keepFetch = ctx.fetch;
+  ctx.fetch = async () => {
+    qn++;
+    if (qn === 1) return { ok: false, status: 503, json: async () => ({ error: { message: '503 tạm thời' } }) };
+    return { ok: true, json: async () => ({ choices: [{ message: { content: '{"bubbles":[{"box_2d":[200,100,600,400],"text":"X"}]}' } }] }) };
+  };
+  const [q1, q2] = await Promise.all([
+    call({ type: 'translate', data: 'EE', mime: 'image/jpeg' }),
+    call({ type: 'translate', data: 'EE', mime: 'image/jpeg' }),
+  ]);
+  ctx.fetch = keepFetch;
+  assert.equal(q1.bubbles?.[0]?.text, 'X', 'flaky answer retried invisibly');
+  assert.equal(q2.bubbles?.[0]?.text, 'X', 'twin request rides the same job');
+  assert.equal(qn, 3, 'one failed page call + its retry + one polish — fetched once for both callers');
+  const q3 = await call({ type: 'translate', data: 'EE', mime: 'image/jpeg' });
+  assert.equal(q3.bubbles[0].text, 'X');
+  assert.equal(qn, 3, 'a third request is served from the cache');
 
   // a request that never answers must end in a clear error (timeout shortened to 50ms for the test)
   ctx.AbortSignal = { timeout: () => AbortSignal.timeout(50) };

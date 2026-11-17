@@ -10,11 +10,11 @@ Nhìn trang truyện, tìm mọi bong bóng thoại, khung dẫn truyện và ch
 Với mỗi vùng chữ trả về `;
 // Geometry spelled out because gateways serve many model families that were never trained on box_2d:
 // without the origin/scale they answer on pixels or a 0-100 percent scale, and without the one-box-per-
-// bubble rule they merge neighbouring bubbles. The worked example anchors the convention for them:
-// gpt-5.6-sol via a gateway, 4 runs on the truth-scored page: 71% bubbles hit (1/4 passes) with the old
-// one-liner, 86% (3/4 passes) with this; gemini-3.1-flash-lite stays at its documented 86-93%.
+// bubble rule they merge neighbouring bubbles. The worked example anchors the convention for them.
+// gpt-5.6-sol via a gateway, on two truth-scored pages: the old one-liner got 71%/86% bubbles hit
+// (1/4 and 2/3 passes); this sweep-by-panel version got 93-100% (6/6 passes when the model answered).
 // Style rules stay out (they cost box accuracy, see below); only these geometry lines are measured safe.
-const BOX_RULE = 'box_2d = [ymin, xmin, ymax, xmax] — 4 số nguyên 0-1000 theo khung ảnh: (0,0) là góc trên trái, 1000 là mép dưới/phải; ymin/ymax tính từ mép trên, xmin/xmax tính từ mép trái. Mỗi bong bóng/khung một ô riêng, ôm sát khối chữ gốc trong đó — không ôm cả khung truyện, không tràn sang vùng chữ khác. Ví dụ: bong bóng có chữ nằm ở nửa trên bên trái, chiếm khoảng nửa chiều rộng ảnh thì box_2d vào khoảng [100, 50, 300, 500]. Thứ tự theo thứ tự đọc.';
+const BOX_RULE = 'box_2d = [ymin, xmin, ymax, xmax] — 4 số nguyên 0-1000 theo khung ảnh: (0,0) là góc trên trái, 1000 là mép dưới/phải; ymin/ymax tính từ mép trên, xmin/xmax tính từ mép trái. Dò hết trang theo từng khung truyện (từ khung trên xuống khung dưới), liệt kê MỌI khối chữ: bong bóng thoại, chữ nghĩ thầm, khung dẫn truyện, chữ viết tay nhỏ cạnh nhân vật. Mỗi khối chữ một ô riêng ôm sát chữ — không ôm cả khung truyện, không tràn sang vùng chữ khác, hai ô không chồng nhau. Ví dụ: bong bóng có chữ nằm ở nửa trên bên trái, chiếm khoảng nửa chiều rộng ảnh thì box_2d vào khoảng [100, 50, 300, 500]. Thứ tự theo thứ tự đọc.';
 
 // box_2d [ymin, xmin, ymax, xmax] on a 0-1000 scale is the box format Gemini is trained on (per Google's
 // image-understanding docs); free-form x/y/w/h percentages came back misplaced on a real page.
@@ -149,8 +149,19 @@ async function testImage() {
 }
 
 function parseBubbles(text) {
-  const { bubbles } = JSON.parse(text.replace(/^\s*```(?:json)?|```\s*$/g, '')); // some models wrap JSON in fences
-  if (!Array.isArray(bubbles)) throw new Error('Model trả JSON sai định dạng.');
+  const out = JSON.parse(text.replace(/^\s*```(?:json)?|```\s*$/g, '')); // some models wrap JSON in fences
+  // despite the schema some models answer with a bare array instead of {"bubbles": [...]}, and gateways
+  // wrap the array one level deep in their own envelope ({"data": [...]}). Take any bubble-like array.
+  const look = (v) => Array.isArray(v) && (!v.length || (v[0] && typeof v[0] === 'object'
+    && ('box_2d' in v[0] || 'text' in v[0] || 'box' in v[0])));
+  const bubbles = Array.isArray(out) ? out : Array.isArray(out?.bubbles) ? out.bubbles : Object.values(out ?? {}).find(look);
+  if (!Array.isArray(bubbles)) {
+    // a 200 response carrying the gateway's own error lands here ("số dư không đủ", rate limit…):
+    // surface it — it tells the user what's actually wrong, and the queue retries it the same way
+    const why = [out?.msg, out?.message, out?.error?.message, typeof out?.error === 'string' ? out.error : '']
+      .find((v) => typeof v === 'string' && v.trim());
+    throw new Error('Model trả JSON sai định dạng' + (why ? ': ' + why.trim().slice(0, 120) : '.'));
+  }
   // A model that answered on a 0-100 percent scale despite the prompt would have every box clamped into
   // the top-left corner; all coordinates <= 100 gives it away (a full manga page never keeps every bubble
   // there). Rescale the whole answer instead of clamping it.
@@ -321,10 +332,11 @@ function providerFor(id, base) {
 
 // Cache by image content + model: MangaDex recreates <img> tags for pages you go back to, and F5 reloads
 // them, so without this the same page is paid for again. Entries are ~1-2 KB; keep the newest CACHE_MAX.
-const CACHE_MAX = 500;
+// Bump CACHE_V when the prompt changes, so results from the old prompt don't shadow the new ones.
+const CACHE_MAX = 500, CACHE_V = 2;
 async function cacheKey(model, data) {
   const h = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(data)));
-  return 'c:' + model + ':' + [...h.slice(0, 16)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  return 'c:' + model + ':v' + CACHE_V + ':' + [...h.slice(0, 16)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 async function cachePut(key, bubbles) {
   await chrome.storage.local.set({ [key]: { t: Date.now(), bubbles } });
@@ -335,26 +347,106 @@ async function cachePut(key, bubbles) {
   }
 }
 
-// Returns { bubbles, glossary }. glossary (pronoun pairs for this tab) only changes when polish runs.
-async function translate({ data, mime, url, context, glossary = '' }) {
+// ---------- hàng đợi dịch ----------
+// Mọi yêu cầu xếp hàng theo id (chính là key cache: ảnh+model), worker xử lý tối đa QMAX job cùng lúc:
+// nhiều tab không dồn API tới hỏng gateway (503/524), trang đang xem được ưu tiên lên đầu, và một câu
+// trả lời hỏng tạm thời được tự thử lại — người dùng không gặp lỗi là mấy. Kết quả xong được lưu vào
+// cache theo id (bền vững qua reload): lật lại trang đã dịch là hiện ngay, không tốn thêm lần gọi nào.
+const QMAX = 2, Q_TRIES = 3;
+let Q_RETRY_MS = 5000; // per-try backoff; the unit test shortens it
+const pending = [], running = new Set(), waiters = new Map(); // in-flight state of the worker (SW lifetime)
+let wakeTimer = null;
+
+async function enqueue(key, job, urgent, resolve) {
+  // a twin request may have finished while we were getting here: its result is already in the cache
+  const hit = (await chrome.storage.local.get(key))[key];
+  if (hit) { resolve({ bubbles: hit.bubbles, glossary: job.glossary }); return; }
+  let w = waiters.get(key);
+  if (!w) waiters.set(key, (w = new Set()));
+  w.add(resolve);
+  if (running.has(key)) return; // job in flight: our waiter resolves when it does
+  const q = pending.find((p) => p.key === key);
+  if (q) { // already waiting: just bump priority if asked
+    q.urgent ||= urgent;
+    if (q.urgent && q !== pending[0]) { pending.splice(pending.indexOf(q), 1); pending.unshift(q); }
+    return;
+  }
+  urgent ? pending.unshift({ key, job, urgent }) : pending.push({ key, job });
+  pump();
+}
+
+function pump() {
+  clearTimeout(wakeTimer);
+  while (running.size < QMAX) {
+    const i = pending.findIndex((p) => p.urgent || !(p.notBefore > Date.now())); // backoff only defers non-urgent retries
+    if (i < 0) { // everything left is in backoff: wake up when the first one is due
+      if (pending.length) wakeTimer = setTimeout(pump, Math.min(...pending.map((p) => p.notBefore)) - Date.now());
+      return;
+    }
+    const item = pending.splice(i, 1)[0];
+    running.add(item.key);
+    run(item);
+  }
+}
+
+async function run(item) {
+  const { key, job } = item;
+  try {
+    const res = await translateJob(job);
+    const w = waiters.get(key);
+    waiters.delete(key);
+    running.delete(key); // before resolving: a caller arriving now re-checks the cache instead of attaching to a dead waiter
+    w?.forEach((f) => f(res));
+  } catch (e) {
+    running.delete(key);
+    job.tries = (job.tries || 0) + 1;
+    if (job.tries < Q_TRIES) {
+      // flaky answer (broken JSON, HTTP 524, a 200-wrapped gateway error): retry with backoff, but
+      // back in the queue, not asleep in the slot — the other pages keep their turn meanwhile
+      item.notBefore = Date.now() + job.tries * Q_RETRY_MS;
+      pending.unshift(item);
+    } else {
+      const w = waiters.get(key);
+      waiters.delete(key);
+      w?.forEach((f) => f({ error: String(e.message || e) }));
+    }
+  } finally {
+    pump();
+  }
+}
+
+// translate(): resolve provider + cache check, then hand the work to the queue
+async function translate({ data, mime, url, context, glossary = '', urgent }) {
   if (!data) ({ data, mime } = await fetchImage(url));
   const { provider = 'anthropic', keys = {}, models = {}, bases = {}, polish: doPolish = true } = await chrome.storage.local.get(['provider', 'keys', 'models', 'bases', 'polish']);
   if ((!keys[provider] && provider !== 'custom') || !models[provider]) throw new Error('Chưa nhập API key / chọn model (bấm icon extension).');
-  const P = providerFor(provider, bases[provider]);
   const key = await cacheKey(models[provider] + (doPolish ? '+p' : ''), data);
   const hit = (await chrome.storage.local.get(key))[key];
   if (hit) return { bubbles: hit.bubbles, glossary }; // same page already translated by this model: no API call
+  const job = { key, data, mime, context, glossary, provider, base: bases[provider], model: models[provider], apiKey: keys[provider], doPolish };
+  return new Promise((resolve) => enqueue(key, job, urgent, resolve));
+}
+
+// Returns { bubbles, glossary }. glossary (pronoun pairs for this tab) only changes when polish runs.
+async function translateJob(job) {
+  const { key, data, mime, context, glossary = '', provider, base, model, apiKey, doPolish } = job;
+  const P = providerFor(provider, base);
   const prompt = context ? `Lời thoại trang trước (giữ xưng hô nhất quán):\n${context}` : 'Đây là trang đầu tiên.';
-  let bubbles = parseBubbles(await P.translate(keys[provider], models[provider], { data, mime }, prompt, undefined, pageJob(doPolish)));
+  const call = () => P.translate(apiKey, model, { data, mime }, prompt, undefined, pageJob(doPolish));
+  let bubbles = parseBubbles(await call());
+  // a page that clearly has text but came back with zero boxes is a model flake (seen with gpt-5.6-sol,
+  // 1 run in 7): one retry, not a loop — a genuinely textless page pays a second call instead of lying
+  if (!bubbles.length) bubbles = parseBubbles(await call());
+  let g = glossary;
   if (doPolish) {
     const before = glossary;
-    ({ bubbles, glossary } = await polish(P, keys[provider], models[provider], bubbles, context, glossary));
+    ({ bubbles, glossary: g } = await polish(P, apiKey, model, bubbles, context, glossary));
     // This page just added pronoun pairs: polish it once more under them, so it follows its own decision.
     // (gemini-3.1-flash-lite, real page, 3 runs: 1-2 mixed lines left after one pass, 0 after this.)
-    if (glossary !== before) ({ bubbles, glossary } = await polish(P, keys[provider], models[provider], bubbles, context, glossary));
+    if (g !== before) ({ bubbles, glossary: g } = await polish(P, apiKey, model, bubbles, context, g));
   }
   await cachePut(key, bubbles);
-  return { bubbles, glossary };
+  return { bubbles, glossary: g };
 }
 
 // Bump together with POPUP_API in popup.js whenever the messages change. An unpacked extension's popup

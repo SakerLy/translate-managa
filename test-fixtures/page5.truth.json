@@ -1,0 +1,21 @@
+{
+  "_note": "Text areas of the speech bubbles in page5.png (768x1087), measured by hand in pixels: [x0, y0, x1, y1]. Checked visually with draw-boxes.py.",
+  "width": 768,
+  "height": 1087,
+  "bubbles": [
+    { "id": "TIDAK APA-APA...", "box": [55, 195, 200, 360] },
+    { "id": "MAKASIH.", "box": [205, 295, 300, 350] },
+    { "id": "BIAR KUBAWAKAN.", "box": [330, 240, 410, 300] },
+    { "id": "KALAU KAMU TIDAK KEBERATAN...", "box": [415, 110, 550, 235] },
+    { "id": "YAH...", "box": [555, 170, 625, 285] },
+    { "id": "DARI SIANG HINGGA TENGAH MALAM...", "box": [615, 80, 700, 215] },
+    { "id": "GRATAK 1", "box": [45, 420, 170, 485] },
+    { "id": "GRATAK 2", "box": [150, 455, 240, 540] },
+    { "id": "GATA", "box": [210, 705, 300, 780] },
+    { "id": "AH, BEGITU YA.", "box": [55, 630, 165, 745] },
+    { "id": "RUMAHKU KAN SUDAH TUA...", "box": [195, 520, 300, 670] },
+    { "id": "DAN JUGA, SEBENARNYA...", "box": [310, 455, 420, 590] },
+    { "id": "MA KA NYA...", "box": [130, 800, 310, 990] },
+    { "id": "BERAT SEPERTI INI...", "box": [425, 830, 620, 990] }
+  ]
+}

@@ -8,9 +8,20 @@ const fs = require('fs'), vm = require('vm'), path = require('path');
 for (const line of fs.readFileSync(path.join(__dirname, '.env'), 'utf8').split(/\r?\n/)) {
   const m = line.match(/^\s*([A-Z_]+)\s*=\s*(.+?)\s*$/); if (m && !process.env[m[1]]) process.env[m[1]] = m[2];
 }
-const img = path.join(__dirname, 'test-fixtures/page4.png');
+const img = path.join(__dirname, process.env.PAGE || 'test-fixtures/page4.png');
 const page = { data: fs.readFileSync(img).toString('base64'), mime: 'image/png' };
-const { score } = require('./test-live');
+// chấm theo đáp án của chính trang đó (không dùng score của test-live vì nó gắn với page4)
+const truth = JSON.parse(fs.readFileSync(img.replace(/\.(png|jpe?g)$/i, '.truth.json'), 'utf8'));
+const score = (bubbles) => {
+  const { width: W, height: H } = truth, M = 15; // px tolerance around each truth box
+  const centre = (b) => [(b.x + b.w / 2) * W / 100, (b.y + b.h / 2) * H / 100];
+  const inside = ([cx, cy], [x0, y0, x1, y1]) => cx >= x0 - M && cx <= x1 + M && cy >= y0 - M && cy <= y1 + M;
+  const missed = truth.bubbles.filter((t) => !bubbles.some((b) => inside(centre(b), t.box))).map((t) => t.id);
+  const stray = bubbles.filter((b) => !truth.bubbles.some((t) => inside(centre(b), t.box))).map((b) => b.text);
+  const recall = 1 - missed.length / truth.bubbles.length;
+  const precision = bubbles.length ? 1 - stray.length / bubbles.length : 0;
+  return { recall, precision, pass: recall >= 0.8 && precision >= 0.8 };
+};
 
 const provider = process.env.PROVIDER || 'custom';
 const KEY_ENV = { custom: 'CUSTOM_API_KEY', gemini: 'GEMINI_API_KEY', openai: 'OPENAI_API_KEY', openrouter: 'OPENROUTER_API_KEY', anthropic: 'ANTHROPIC_API_KEY', groq: 'GROQ_API_KEY' };

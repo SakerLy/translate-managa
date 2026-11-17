@@ -2,7 +2,7 @@
 // next few pages, up to MAX_PARALLEL requests at a time, and picks up new pages as you flip/scroll.
 // No innerHTML anywhere: MangaDex enforces Trusted Types, which makes innerHTML assignments throw.
 (() => {
-  const MAX_PARALLEL = 3; // concurrent API calls
+  const MAX_PARALLEL = 3; // requests in flight; the background queues and throttles the actual API calls
   const AHEAD = 2; // hidden preloaded pages (single-page reader) to translate past the visible one
 
   if (window.__md) {
@@ -90,7 +90,7 @@
     return best;
   }
 
-  async function translate(img, context) {
+  async function translate(img, context, urgent) {
     img.dataset.mdDone = '1';
     const el = document.createElement('div');
     el.className = 'md-layer';
@@ -107,7 +107,8 @@
     place();
     try {
       const { msg, px } = encode(img);
-      const res = await chrome.runtime.sendMessage({ type: 'translate', ...msg, context, glossary: window.__md.glossary });
+      // urgent = trang đang xem: nhảy hàng đợi lên đầu; trang ẩn trước lên xếp sau
+      const res = await chrome.runtime.sendMessage({ type: 'translate', ...msg, context, glossary: window.__md.glossary, urgent });
       if (res.error) throw new Error(res.error);
       if (res.glossary) window.__md.glossary = res.glossary; // pronoun pairs agreed so far, shared by later pages
       // snap boxes to the real bubbles and take their colours (fit.js, injected before this file)
@@ -155,7 +156,7 @@
       if (!n) return;
       active++;
       // context = previous page's lines if already translated; never wait for it
-      translate(n.img, (n.prev && texts.get(n.prev)) || '').finally(() => { active--; pump(); });
+      translate(n.img, (n.prev && texts.get(n.prev)) || '', n.s === 0).finally(() => { active--; pump(); });
     }
   }
 
