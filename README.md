@@ -108,6 +108,14 @@ Chỉ chấp nhận địa chỉ `http://` hoặc `https://`. API key được g
 
 Model mạnh hơn thì bước trau chuốt văn phong cũng làm tốt hơn, nhưng chậm hơn.
 
+**Bản 0.2** — đo lại trên trang test tổng hợp 14 bong bóng (8 dạng: thoại, nghĩ thầm, nền tối, caption, chữ dọc, SFX, chữ nhỏ, 2 bong bóng sát nhau) qua 3 model thị giác, mỗi model chạy lặp 3–5 lần:
+
+| Model | Ngày 0.2: trúng/dđúng chỗ (ô thô) | Sau khi khớp ô theo điểm ảnh |
+|---|---|---|
+| `glm-4.5v` | 85–97% | **95–100%** |
+| `glm-4.6v` | 76–95% | **86–100%** |
+| `glm-4v` | 76–90% | **80–97%** |
+
 </details>
 
 <details>

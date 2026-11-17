@@ -1,27 +1,41 @@
 // Raw fetch instead of provider SDKs: a plain MV3 extension has no bundler step.
+// Format rules ride at the TOP of the system prompt and the worked example spells out the full JSON
+// object. Measured on a truth-scored page (glm-4.6v via gateway, 3 runs each): the old prompt —
+// style first, geometry appended as one long sentence, example described but not shown — parsed
+// only 1/3 runs (the other 2 came back as made-up plain-text "[box] text" lines); this version
+// parsed 3/3 with recall 95% / precision 97%. Style rules stay out of the geometry block.
 const SYSTEM = `Bạn là dịch giả truyện tranh (manga/manhwa/manhua) chuyên nghiệp sang tiếng Việt.
-Nhìn trang truyện, tìm mọi bong bóng thoại, khung dẫn truyện và chữ quan trọng, rồi dịch sang tiếng Việt như một bản dịch chất lượng cao:
+Nhiệm vụ: nhìn trang truyện, tìm MỌI khối chữ, rồi dịch sang tiếng Việt và trả về JSON.
+
+QUY TẮC ĐỊNH DẠNG (bắt buộc):
+- Trả về DUY NHẤT một khối JSON hợp lệ, không thêm chữ nào trước/sau:
+{"bubbles": [{"box_2d": [ymin, xmin, ymax, xmax], "text": "bản dịch"}]}
+- box_2d = 4 số nguyên 0-1000 theo khung ảnh: (0,0) là góc trên trái, 1000 là mép dưới/phải; ymin/ymax tính từ mép trên, xmin/xmax tính từ mép trái.
+- KHÔNG trả plain-text, KHÔNG markdown, KHÔNG giải thích. Chỉ JSON.
+
+QUY TẮC DÒ TRANG:
+- Dò hết trang theo từng khung truyện (từ khung trên xuống khung dưới), liệt kê MỌI khối chữ: bong bóng thoại, chữ nghĩ thầm (bong bóng mây), khung dẫn truyện, chữ viết tay nhỏ cạnh nhân vật, SFX.
+- Mỗi khối chữ MỘT ô riêng ôm sát chữ — không ôm cả khung truyện, không tràn sang vùng chữ khác, hai ô không chồng nhau.
+- Chữ dọc kiểu Nhật: đọc cột từ phải sang trái, mỗi cột từ trên xuống; một ô bao cả cụm chữ dọc đó.
+- SFX (từ tượng thanh): chỉ dịch khi ngắn, có ý nghĩa với cảnh; SFX dài hoặc chỉ là trang trí thì bỏ qua.
+- Chữ bị che khuất/nhòe: dịch phần đọc được, không đoán mò.
+
+QUY TẮC DỊCH:
 - Văn nói tự nhiên, đúng giọng và tính cách nhân vật; không dịch từng chữ.
 - Xưng hô theo quan hệ và bối cảnh: bạn bè (tao/mày, tớ/cậu), người lạ/lịch sự (tôi/anh, tôi/cô), gia đình, cấp trên; truyện cổ trang/tu tiên dùng ta/ngươi, tại hạ, sư huynh...
 - Giữ tên riêng; truyện Nhật giữ hậu tố -san, -kun, -chan, senpai.
 - Câu ngắn gọn để vừa bong bóng. Giữ cảm thán, ngập ngừng ("...", "!?").
-- Hiệu ứng âm thanh (SFX): chỉ dịch khi ngắn và có ý nghĩa, nếu không thì bỏ qua.
+- Lời nghĩ thầm đặt trong ngoặc đơn (...) nếu bản gốc có; khung dẫn truyện/bản tin giữ văn kể gọn.
 - Bỏ qua watermark, chữ ký nhóm dịch, số trang.
-Với mỗi vùng chữ trả về `;
-// Geometry spelled out because gateways serve many model families that were never trained on box_2d:
-// without the origin/scale they answer on pixels or a 0-100 percent scale, and without the one-box-per-
-// bubble rule they merge neighbouring bubbles. The worked example anchors the convention for them.
-// gpt-5.6-sol via a gateway, on two truth-scored pages: the old one-liner got 71%/86% bubbles hit
-// (1/4 and 2/3 passes); this sweep-by-panel version got 93-100% (6/6 passes when the model answered).
-// Style rules stay out (they cost box accuracy, see below); only these geometry lines are measured safe.
-const BOX_RULE = 'box_2d = [ymin, xmin, ymax, xmax] — 4 số nguyên 0-1000 theo khung ảnh: (0,0) là góc trên trái, 1000 là mép dưới/phải; ymin/ymax tính từ mép trên, xmin/xmax tính từ mép trái. Dò hết trang theo từng khung truyện (từ khung trên xuống khung dưới), liệt kê MỌI khối chữ: bong bóng thoại, chữ nghĩ thầm, khung dẫn truyện, chữ viết tay nhỏ cạnh nhân vật. Mỗi khối chữ một ô riêng ôm sát chữ — không ôm cả khung truyện, không tràn sang vùng chữ khác, hai ô không chồng nhau. Ví dụ: bong bóng có chữ nằm ở nửa trên bên trái, chiếm khoảng nửa chiều rộng ảnh thì box_2d vào khoảng [100, 50, 300, 500]. Thứ tự theo thứ tự đọc.';
 
+VÍ DỤ (bong bóng có chữ nằm ở nửa trên bên trái, chiếm khoảng nửa chiều rộng ảnh):
+{"bubbles": [{"box_2d": [100, 50, 300, 500], "text": "Cậu định đi đâu vậy?"}]}`;
 // box_2d [ymin, xmin, ymax, xmax] on a 0-1000 scale is the box format Gemini is trained on (per Google's
 // image-understanding docs); free-form x/y/w/h percentages came back misplaced on a real page.
 const pageJob = (withSrc) => ({
   name: 'bubbles',
   // src (the original text) is only needed by polish(); it costs ~500 output tokens a page, so skip it otherwise
-  system: SYSTEM + (withSrc ? 'src = chữ gốc đúng như trong ảnh, text = bản dịch, ' : '') + BOX_RULE, // off = the exact prompt measured at 93%
+  system: SYSTEM + ' ' + (withSrc ? 'Mỗi mục thêm "src": chữ gốc đúng như trong ảnh (bên cạnh "text" là bản dịch).' : ''),
   schema: {
     type: 'object', additionalProperties: false, required: ['bubbles'],
     properties: {
@@ -35,6 +49,7 @@ const pageJob = (withSrc) => ({
     },
   },
 });
+
 const PAGE_JOB = pageJob(false);
 
 // Second, text-only pass that rewrites the draft lines in natural Vietnamese. Kept out of the image prompt
@@ -61,7 +76,9 @@ Ví dụ cứng → tự nhiên:
 "Điều đó là không thể nào!" → "Làm gì có chuyện đó!"
 "Nếu bạn không phiền, tôi sẽ giúp bạn như một lời cảm ơn." → "Không phiền thì để tớ giúp, coi như trả ơn nhé."
 "Có vẻ như anh ấy đã quên mất cuộc hẹn của chúng tôi." (nghĩ thầm) → "Chắc lại quên béng vụ hẹn rồi..."
-Trả về mảng lines đúng bằng số mục nhận được, cùng thứ tự, mỗi phần tử là câu đã viết lại.`;
+Trả về DUY NHẤT một khối JSON, không thêm chữ nào trước/sau:
+{"lines": ["câu đã viết lại 1", "câu đã viết lại 2"], "glossary": "bảng xưng hô sau trang này"}
+"lines" phải đủ đúng số mục nhận được, cùng thứ tự. Không có cặp xưng hô mới thì "glossary" = bảng cũ nguyên văn.`;
 const POLISH_JOB = {
   system: POLISH_SYSTEM, name: 'lines',
   schema: {
@@ -79,7 +96,11 @@ async function polish(provider, key, model, bubbles, context, glossary = '') {
     const prompt = (glossary ? `BẢNG XƯNG HÔ:\n${glossary}\n\n` : '') + (context ? `Lời thoại trang trước:\n${context}\n\n` : '')
       + 'Các bong bóng:\n' + JSON.stringify(bubbles.map((b) => ({ src: b.src || '', draft: b.text })));
     const raw = await P.translate(key, model, null, prompt, undefined, POLISH_JOB);
-    const out = JSON.parse(raw.replace(/^\s*```(?:json)?|```\s*$/g, ''));
+    let out = JSON.parse(raw.replace(/^\s*```(?:json)?|```\s*$/g, ''));
+    // some models answer with the bare lines array despite the schema (seen live: glm-4.6v returned
+    // ["Cậu đi đâu đấy?", "Ừ!"] — polish then silently kept every draft). Take it: the glossary
+    // just stays the old one, which is the correct fallback anyway.
+    if (Array.isArray(out)) out = { lines: out, glossary: '' };
     const g = typeof out.glossary === 'string' && out.glossary.trim() ? out.glossary.trim().slice(0, 1500) : glossary; // cap: it rides in every later prompt
     const { lines } = out;
     if (!Array.isArray(lines) || lines.length !== bubbles.length || lines.some((l) => typeof l !== 'string' || !l.trim())) return { bubbles, glossary: g };
@@ -148,8 +169,39 @@ async function testImage() {
   return { data: b64(await (await c.convertToBlob({ type: 'image/png' })).arrayBuffer()), mime: 'image/png' };
 }
 
+// Fallback for models that answer with plain-text lines instead of the required JSON:
+//   [68, 75, 175, 340] "Định đi về đâu vậy?"
+//   [110, 60, 320, 320] ("Ừ!")
+//   [16, 60, 130, 340] Đi đâu vậy?
+// Returns [{box_2d, text}]; [] when nothing looks like a box line (caller keeps the JSON error).
+const BOX_LINE = /^\s*\[?\s*(-?\d+(?:\.\d+)?)\s*[,;]\s*(-?\d+(?:\.\d+)?)\s*[,;]\s*(-?\d+(?:\.\d+)?)\s*[,;]\s*(-?\d+(?:\.\d+)?)\s*\]?\s*[\)\]]?\s*[:\-]?\s*[\(\[]?\s*(.*?)\s*[\)\]]?\s*$/;
+function parsePlainLines(text) {
+  const out = [];
+  for (const raw of String(text).split(/\r?\n/)) {
+    const m = raw.match(BOX_LINE);
+    if (!m) continue;
+    const t = m[5].replace(/^["'“”]|["'“”]$/g, '').trim();
+    if (!t) continue;
+    const b = [ +m[1], +m[2], +m[3], +m[4] ];
+    // same sanity rules as the JSON path: 4 finite numbers roughly on the 0-1000 scale
+    if (b.every((v) => Number.isFinite(v) && v >= -10 && v <= 1010)) out.push({ box_2d: b, text: t });
+  }
+  return out;
+}
+
 function parseBubbles(text) {
-  const out = JSON.parse(text.replace(/^\s*```(?:json)?|```\s*$/g, '')); // some models wrap JSON in fences
+  // Some models wrap JSON in fences; a few (measured: glm-4.6v via gateway, 2 of 3 runs with the
+  // old prompt) ignore the schema entirely and answer with one "[ymin, xmin, ymax, xmax] text" line
+  // per bubble. JSON.parse throws on that, so fall back to a line parser before giving up — it
+  // recovered both runs verbatim (same boxes as the JSON run would give).
+  let out;
+  try {
+    out = JSON.parse(text.replace(/^\s*```(?:json)?|```\s*$/g, ''));
+  } catch (e) {
+    const lines = parsePlainLines(text);
+    if (lines.length) out = { bubbles: lines };
+    else throw e;
+  }
   // despite the schema some models answer with a bare array instead of {"bubbles": [...]}, and gateways
   // wrap the array one level deep in their own envelope ({"data": [...]}). Take any bubble-like array.
   const look = (v) => Array.isArray(v) && (!v.length || (v[0] && typeof v[0] === 'object'
@@ -354,16 +406,16 @@ async function cachePut(key, bubbles) {
 // cache theo id (bền vững qua reload): lật lại trang đã dịch là hiện ngay, không tốn thêm lần gọi nào.
 const QMAX = 2, Q_TRIES = 3;
 let Q_RETRY_MS = 5000; // per-try backoff; the unit test shortens it
-const pending = [], running = new Set(), waiters = new Map(); // in-flight state of the worker (SW lifetime)
+const pending = [], running = new Set(), waiters = new Map(); // waiters: key -> Set of {resolve, onDraft}
 let wakeTimer = null;
 
-async function enqueue(key, job, urgent, resolve) {
+async function enqueue(key, job, urgent, resolve, onDraft) {
   // a twin request may have finished while we were getting here: its result is already in the cache
   const hit = (await chrome.storage.local.get(key))[key];
   if (hit) { resolve({ bubbles: hit.bubbles, glossary: job.glossary }); return; }
   let w = waiters.get(key);
   if (!w) waiters.set(key, (w = new Set()));
-  w.add(resolve);
+  w.add({ resolve, onDraft });
   if (running.has(key)) return; // job in flight: our waiter resolves when it does
   const q = pending.find((p) => p.key === key);
   if (q) { // already waiting: just bump priority if asked
@@ -392,11 +444,15 @@ function pump() {
 async function run(item) {
   const { key, job } = item;
   try {
-    const res = await translateJob(job);
+    const res = await translateJob(job, (draft) => {
+      // the read pass just produced boxes: show them before polish runs (a visible page goes from
+      // ~2 calls' latency to 1 — measured on glm-4.6v: draft at 5-8s, polished +2.5s later)
+      for (const w of waiters.get(key) || []) w.onDraft?.(draft);
+    });
     const w = waiters.get(key);
     waiters.delete(key);
     running.delete(key); // before resolving: a caller arriving now re-checks the cache instead of attaching to a dead waiter
-    w?.forEach((f) => f(res));
+    w?.forEach((f) => f.resolve(res));
   } catch (e) {
     running.delete(key);
     job.tries = (job.tries || 0) + 1;
@@ -408,7 +464,7 @@ async function run(item) {
     } else {
       const w = waiters.get(key);
       waiters.delete(key);
-      w?.forEach((f) => f({ error: String(e.message || e) }));
+      w?.forEach((f) => f.resolve({ error: String(e.message || e) }));
     }
   } finally {
     pump();
@@ -416,7 +472,7 @@ async function run(item) {
 }
 
 // translate(): resolve provider + cache check, then hand the work to the queue
-async function translate({ data, mime, url, context, glossary = '', urgent }) {
+async function translate({ data, mime, url, context, glossary = '', urgent, onDraft }) {
   if (!data) ({ data, mime } = await fetchImage(url));
   const { provider = 'anthropic', keys = {}, models = {}, bases = {}, polish: doPolish = true } = await chrome.storage.local.get(['provider', 'keys', 'models', 'bases', 'polish']);
   if ((!keys[provider] && provider !== 'custom') || !models[provider]) throw new Error('Chưa nhập API key / chọn model (bấm icon extension).');
@@ -424,11 +480,12 @@ async function translate({ data, mime, url, context, glossary = '', urgent }) {
   const hit = (await chrome.storage.local.get(key))[key];
   if (hit) return { bubbles: hit.bubbles, glossary }; // same page already translated by this model: no API call
   const job = { key, data, mime, context, glossary, provider, base: bases[provider], model: models[provider], apiKey: keys[provider], doPolish };
-  return new Promise((resolve) => enqueue(key, job, urgent, resolve));
+  return new Promise((resolve) => enqueue(key, job, urgent, resolve, onDraft));
 }
 
 // Returns { bubbles, glossary }. glossary (pronoun pairs for this tab) only changes when polish runs.
-async function translateJob(job) {
+// onDraft(bubbles): called with the read pass's boxes as soon as they exist, before polish.
+async function translateJob(job, onDraft) {
   const { key, data, mime, context, glossary = '', provider, base, model, apiKey, doPolish } = job;
   const P = providerFor(provider, base);
   const prompt = context ? `Lời thoại trang trước (giữ xưng hô nhất quán):\n${context}` : 'Đây là trang đầu tiên.';
@@ -437,6 +494,7 @@ async function translateJob(job) {
   // a page that clearly has text but came back with zero boxes is a model flake (seen with gpt-5.6-sol,
   // 1 run in 7): one retry, not a loop — a genuinely textless page pays a second call instead of lying
   if (!bubbles.length) bubbles = parseBubbles(await call());
+  onDraft?.(bubbles);
   let g = glossary;
   if (doPolish) {
     const before = glossary;
@@ -455,9 +513,24 @@ async function translateJob(job) {
 // talking to an old worker that had no 'custom' provider.
 const API = 4;
 
+// Draft-first streaming: content.js opens a port named "md-draft-<imgsrc-hash>" and names it in the
+// translate message; while that page's job runs we hold the port and push the read pass's boxes
+// through it the moment they exist. A page you're looking at shows text after 1 call instead of 2.
+const draftPorts = new Map(); // portName -> port
+chrome.runtime.onConnect.addListener((port) => {
+  if (!port.name.startsWith('md-draft-')) return;
+  draftPorts.set(port.name, port);
+  port.onDisconnect.addListener(() => draftPorts.delete(port.name));
+});
+const pushDraft = (portName, bubbles) => {
+  const port = draftPorts.get(portName);
+  if (!port) return;
+  try { port.postMessage({ type: 'draft', bubbles }); } catch { draftPorts.delete(portName); }
+};
+
 chrome.runtime.onMessage.addListener((msg, _sender, send) => {
   const job = msg.type === 'hello' ? Promise.resolve({ api: API })
-    : msg.type === 'translate' ? translate(msg)
+    : msg.type === 'translate' ? translate(msg.draftPort ? { ...msg, onDraft: (bubbles) => pushDraft(msg.draftPort, bubbles) } : msg)
     : msg.type === 'models' ? Promise.resolve().then(() => providerFor(msg.provider, msg.base).models(msg.key)).then((list) => ({ list }))
     : msg.type === 'probe' ? probe(msg).then((sample) => ({ sample }))
     : msg.type === 'defaults' ? Promise.resolve({ bases: Object.fromEntries(Object.entries(PROVIDERS).map(([k, p]) => [k, p.base])) })

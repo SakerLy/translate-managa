@@ -2,6 +2,7 @@
 const fs = require('fs'), vm = require('vm'), assert = require('assert');
 
 let replies = {}, store = {}, listener, fetches = 0;
+const ports = new Map(); // name -> {postMessage spies}
 // behaves like chrome.storage.local: get(null|key|keys), set, remove
 const local = {
   get: async (k) => (k === null ? { ...store } : Object.fromEntries([].concat(k).filter((x) => x in store).map((x) => [x, store[x]]))),
@@ -16,7 +17,13 @@ const ctx = {
     const key = Object.keys(replies).find((k) => url.startsWith(k));
     return { ok: true, json: async () => replies[key] };
   },
-  chrome: { runtime: { onMessage: { addListener: (f) => (listener = f) } }, storage: { local } },
+  chrome: {
+    runtime: {
+      onMessage: { addListener: (f) => (listener = f) },
+      onConnect: { addListener: (f) => (ctx.__onConnect = f) },
+    },
+    storage: { local },
+  },
 };
 vm.createContext(ctx);
 vm.runInContext(fs.readFileSync(__dirname + '/manga-dich/background.js', 'utf8'), ctx);
@@ -197,6 +204,52 @@ const call = (msg) => new Promise((res) => listener(msg, null, res));
 
   store = {};
   assert.match((await call({ type: 'translate', data: 'AA', mime: 'image/jpeg' })).error, /API key/);
+
+  // parsePlainLines fallback: the three plain-text formats a real gateway model produced when it
+  // ignored the JSON schema (glm-4.6v, 2 of 3 runs with the old prompt) all parse into bubbles
+  {
+    const parse = vm.runInContext('parseBubbles', ctx);
+    const a = parse('[68, 75, 175, 340] "Định đi về đâu vậy?"\n[95, 510, 150, 700] "(Mau về nhà thôi...)"');
+    assert.deepEqual(JSON.parse(JSON.stringify(a)), [
+      { x: 7.5, y: 6.8, w: 26.5, h: 10.7, text: 'Định đi về đâu vậy?' },
+      { x: 51, y: 9.5, w: 19, h: 5.5, text: '(Mau về nhà thôi...)' },
+    ], 'quoted lines parse');
+    const b = parse('[110, 60, 320, 320] ("Định đi đâu?")');
+    assert.equal(b.length, 1); assert.equal(b[0].text, 'Định đi đâu?', 'parenthesised lines parse');
+    const c = parse('[16, 60, 130, 340] Đi đâu vậy?');
+    assert.equal(c.length, 1); assert.equal(c[0].text, 'Đi đâu vậy?', 'bare lines parse');
+    // a gateway error in prose must NOT parse as bubbles — the queue must see the failure
+    let threw = false;
+    try { parse('số dư không đủ, vui lòng nạp thêm'); } catch { threw = true; }
+    assert.ok(threw, 'prose error still throws');
+    // plain-text lines on a 0-100 percent scale get the same ×10 rescale as JSON answers
+    const e = parse('[10, 20, 30, 40] một');
+    assert.deepEqual(JSON.parse(JSON.stringify(e)), [{ x: 20, y: 10, w: 20, h: 20, text: 'một' }]);
+  }
+
+  // polish: some models answer with the bare lines array despite the schema (glm-4.6v live run);
+  // take it — the glossary falls back to the old one, which is the correct behaviour anyway
+  {
+    const pol = vm.runInContext('polish', ctx);
+    const draft = [{ x: 1, y: 2, w: 3, h: 4, src: 'どこへ行くの？', text: 'Bạn đi đâu?' }];
+    store = { provider: 'openrouter', keys: { openrouter: 'k' }, models: { openrouter: 'x/y' } };
+    replies = { 'https://openrouter.ai': { choices: [{ message: { content: '["Cậu đi đâu đấy?"]' } }] } };
+    const p = await pol('openrouter', 'k', 'x/y', draft, '', 'Ken ↔ Yuki: tớ/cậu');
+    assert.equal(p.bubbles[0].text, 'Cậu đi đâu đấy?', 'bare-array reply replaces the draft');
+    assert.equal(p.glossary, 'Ken ↔ Yuki: tớ/cậu', 'bare-array reply keeps the old glossary');
+  }
+
+  // draft port: the read pass's boxes are pushed through the caller's port before polish resolves
+  {
+    store = { provider: 'openrouter', keys: { openrouter: 'k' }, models: { openrouter: 'x/d' }, polish: false };
+    replies = { 'https://openrouter.ai': { choices: [{ message: { content: '{"bubbles":[{"box_2d":[100,200,300,400],"text":"Nháp"}]}' } }] } };
+    const pushed = [];
+    const port = { name: 'md-draft-test', postMessage: (m) => pushed.push(m), onDisconnect: { addListener() {} } };
+    ctx.__onConnect(port); // what chrome.runtime.connect(...) triggers in the worker
+    const res = await call({ type: 'translate', data: 'FF', mime: 'image/jpeg', draftPort: 'md-draft-test' });
+    assert.equal(res.bubbles[0].text, 'Nháp');
+    assert.deepEqual(pushed, [{ type: 'draft', bubbles: res.bubbles }], 'draft pushed through the port');
+  }
 
   // a page that comes back with zero boxes is a model flake: retried once (polish skips an empty page)
   store = { provider: 'openrouter', keys: { openrouter: 'k' }, models: { openrouter: 'x/e' } };

@@ -43,11 +43,18 @@
     }
   };
 
-  // Largest font (<= 22px) at which the translation fits its box, measured, so long lines aren't cut off.
+  // Largest font at which the translation fits its box, found by binary search (the old top-down
+  // 1px scan capped every bubble at 22px, so big bubbles got needlessly tiny text). Floor 8px,
+  // ceiling 30px: past that the box is bigger than any bubble's text should be.
+  const fits = (b) => b.scrollHeight <= b.clientHeight + 1 && b.scrollWidth <= b.clientWidth + 1;
   const fit = (b) => {
-    let fs = 22;
-    b.style.fontSize = fs + 'px';
-    while (fs > 7 && (b.scrollHeight > b.clientHeight + 1 || b.scrollWidth > b.clientWidth + 1)) b.style.fontSize = --fs + 'px';
+    let lo = 8, hi = 30, best = 8;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      b.style.fontSize = mid + 'px';
+      if (fits(b)) { best = mid; lo = mid + 1; } else hi = mid - 1;
+    }
+    b.style.fontSize = best + 'px';
   };
 
   const encode = (img) => {
@@ -105,32 +112,52 @@
     const o = { img, el, src: srcOf(img) };
     overlays.push(o);
     place();
-    try {
-      const { msg, px } = encode(img);
-      // urgent = trang đang xem: nhảy hàng đợi lên đầu; trang ẩn trước lên xếp sau
-      const res = await chrome.runtime.sendMessage({ type: 'translate', ...msg, context, glossary: window.__md.glossary, urgent });
-      if (res.error) throw new Error(res.error);
-      if (res.glossary) window.__md.glossary = res.glossary; // pronoun pairs agreed so far, shared by later pages
-      // snap boxes to the real bubbles and take their colours (fit.js, injected before this file)
-      if (px && typeof fitBubbles === 'function') res.bubbles = fitBubbles(px, res.bubbles);
+    // Draw the bubbles we have right now; used for the draft (fast first paint) and the final result.
+    const draw = (list, faded) => {
       el.replaceChildren();
-      if (!res.bubbles.length) { // say so instead of silently clearing the status
+      if (!list.length) { // say so instead of silently clearing the status
         status.textContent = 'Không thấy chữ nào để dịch trên trang này';
         el.append(status);
       }
-      for (const t of res.bubbles) {
+      for (const t of list) {
         const b = document.createElement('div');
         b.className = 'md-b';
         b.textContent = t.text;
         b.title = 'Bấm để ẩn/hiện bản dịch';
         Object.assign(b.style, { left: t.x + '%', top: t.y + '%', width: t.w + '%', height: t.h + '%' },
           t.bg && { background: t.bg, color: t.fg }); // dark/coloured bubbles keep their look
+        if (faded) b.style.opacity = '.75';
         b.onclick = () => b.classList.toggle('off');
         el.append(b);
       }
-      texts.set(img, res.bubbles.map((t) => t.text).join('\n'));
       o.fitW = null; // force a fit for the new bubbles
       place();
+    };
+    try {
+      const { msg, px } = encode(img);
+      // Draft-first: open a port so the worker can push the read pass's boxes the moment they
+      // exist, then swap in the polished text when it lands. Visible page = 1 call to first paint.
+      const portName = 'md-draft-' + Math.random().toString(36).slice(2);
+      const port = chrome.runtime.connect({ name: portName });
+      let stage = 'waiting'; // waiting -> draft -> final: a late draft must never overwrite the final
+      const draft = new Promise((res) => { port.onMessage.addListener((m) => { if (m.type === 'draft') res(m.bubbles); }); });
+      const final = chrome.runtime.sendMessage({ type: 'translate', ...msg, context, glossary: window.__md.glossary, urgent, draftPort: portName })
+        .finally(() => { stage = 'final'; try { port.disconnect(); } catch { /* already gone */ } });
+      draft.then((bubbles) => { // read pass done, polish still running: show the draft now
+        if (stage !== 'waiting' || !px || typeof fitBubbles !== 'function') return;
+        stage = 'draft';
+        draw(fitBubbles(px, bubbles), true);
+        status.textContent = 'Đang trau chuốt văn phong…';
+        el.append(status);
+        clearInterval(timer);
+      }).catch(() => {});
+      const res = await final;
+      if (res.error) throw new Error(res.error);
+      if (res.glossary) window.__md.glossary = res.glossary; // pronoun pairs agreed so far, shared by later pages
+      // snap boxes to the real bubbles and take their colours (fit.js, injected before this file)
+      if (px && typeof fitBubbles === 'function') res.bubbles = fitBubbles(px, res.bubbles);
+      draw(res.bubbles);
+      texts.set(img, res.bubbles.map((t) => t.text).join('\n'));
     } catch (e) {
       status.textContent = 'Lỗi: ' + String(e.message).split('\n')[0].slice(0, 160);
       const retry = document.createElement('button');
