@@ -23,6 +23,10 @@
     font: 600 14px "Segoe UI", system-ui, sans-serif; cursor: pointer; }
   .primary:disabled { opacity: .45; cursor: not-allowed; }
   .hint { color: var(--muted); font-size: 12px; margin: 6px 0 0; }
+  .stale { margin-bottom: 12px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--err); color: var(--text); background: var(--surface); }
+  .stale b { display: block; color: var(--err); margin-bottom: 2px; }
+  .stale .primary { margin-top: 8px; }
+  .stale[hidden] { display: none; }
   section { margin-top: 14px; padding: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
   section h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 10px; }
   .field { margin-bottom: 10px; }
@@ -62,6 +66,11 @@
 </header>
 
 <main>
+  <div class="stale" id="stale" role="alert" hidden>
+    <b>Extension vừa được cập nhật nhưng chưa tải lại.</b>
+    Bấm nút dưới đây, rồi tải lại (F5) trang truyện đang mở.
+    <button class="primary" id="reload" type="button">Tải lại extension</button>
+  </div>
   <button class="primary" id="go" disabled>Bật dịch tự động cho tab này</button>
   <p class="hint">Dịch trang đang xem trước, rồi các trang kế tiếp. Trang lỗi có nút Thử lại ngay trên trang.</p>
 

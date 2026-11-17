@@ -346,8 +346,15 @@ async function translate({ data, mime, url, context, glossary = '' }) {
   return { bubbles, glossary };
 }
 
+// Bump together with POPUP_API in popup.js whenever the messages change. An unpacked extension's popup
+// reads its files fresh from disk, but this service worker keeps running the old code until the extension
+// is reloaded; a real report ("Cannot read properties of undefined (reading 'translate')") was a new popup
+// talking to an old worker that had no 'custom' provider.
+const API = 4;
+
 chrome.runtime.onMessage.addListener((msg, _sender, send) => {
-  const job = msg.type === 'translate' ? translate(msg)
+  const job = msg.type === 'hello' ? Promise.resolve({ api: API })
+    : msg.type === 'translate' ? translate(msg)
     : msg.type === 'models' ? Promise.resolve().then(() => providerFor(msg.provider, msg.base).models(msg.key)).then((list) => ({ list }))
     : msg.type === 'probe' ? probe(msg).then((sample) => ({ sample }))
     : msg.type === 'defaults' ? Promise.resolve({ bases: Object.fromEntries(Object.entries(PROVIDERS).map(([k, p]) => [k, p.base])) })

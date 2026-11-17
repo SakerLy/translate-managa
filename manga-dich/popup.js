@@ -104,7 +104,21 @@ async function findModels() {
   }
 }
 
+const POPUP_API = 4; // must equal API in background.js
+
+// Old background still running (files updated, extension not reloaded): say so and offer the fix,
+// instead of failing later with errors that point at the wrong thing.
+async function backgroundIsCurrent() {
+  const r = await chrome.runtime.sendMessage({ type: 'hello' }).catch(() => null);
+  if (r?.api === POPUP_API) return true;
+  $('stale').hidden = false;
+  for (const id of ['go', 'save', 'model', 'provider']) $(id).disabled = true;
+  return false;
+}
+$('reload').onclick = () => chrome.runtime.reload(); // restarts the worker with the new code; the popup closes
+
 (async () => {
+  if (!(await backgroundIsCurrent())) return;
   st = await chrome.storage.local.get(['provider', 'keys', 'models', 'bases', 'polish']);
   st.keys ||= {}; st.models ||= {}; st.bases ||= {};
   ({ bases: defaults } = await send({ type: 'defaults' }).catch(() => ({ bases: {} })));
