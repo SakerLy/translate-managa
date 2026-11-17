@@ -87,6 +87,8 @@ Mỗi nhà cung cấp có ô **Base URL**. Để trống thì dùng địa chỉ
 | LM Studio | `http://localhost:1234/v1` |
 | Gemini (cổng tương thích OpenAI) | `https://generativelanguage.googleapis.com/v1beta/openai` |
 
+**Cổng trung gian bán API nhiều hãng** (ví dụ `https://gatecheap.vn/v1`) thường nói theo chuẩn OpenAI cho mọi model, kể cả Claude và Gemini, nên hãy chọn **Tùy chỉnh** thay vì Anthropic hay Gemini. Khi Base URL khác mặc định, danh sách model được đọc nguyên văn, không lọc, và bước gọi thử sẽ quyết định model nào dùng được. Nếu bạn quên `/v1` ở cuối, popup sẽ gợi ý thêm vào.
+
 Chỉ chấp nhận địa chỉ `http://` hoặc `https://`. API key được gửi tới đúng Base URL bạn nhập, nên chỉ dùng địa chỉ bạn tin tưởng. Cổng tương thích OpenAI của Gemini đã được test thật (lấy danh sách model, gọi thử đạt); Ollama và LM Studio chưa được test.
 
 <details>

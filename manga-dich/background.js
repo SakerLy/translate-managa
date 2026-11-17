@@ -175,6 +175,7 @@ async function probe({ provider, key, model, base }) {
 const bearer = (key) => (key ? { authorization: `Bearer ${key}` } : {}); // local servers (Ollama…) need no key
 const openaiCompat = (base, keep, extra = () => ({}), rank = () => 0) => ({
   base,
+  listHeaders: bearer,
   async models(key) {
     const { data } = await api(`${this.base}/models`, { headers: bearer(key) });
     return data.filter(keep).sort((a, b) => rank(a) - rank(b) || (b.created ?? 0) - (a.created ?? 0)).map((m) => m.id);
@@ -202,6 +203,7 @@ const geminiVer = (id) => parseFloat(id.match(/^gemini-(\d+(?:\.\d+)?)/)?.[1] ??
 const PROVIDERS = {
   anthropic: {
     base: 'https://api.anthropic.com/v1',
+    listHeaders: anthropicHeaders,
     async models(key) {
       const { data } = await api(`${this.base}/models?limit=1000`, { headers: anthropicHeaders(key) });
       // API lists newest first and reports capabilities per model
@@ -229,6 +231,7 @@ const PROVIDERS = {
     /^(gpt-|o\d|chatgpt)/.test(m.id) && !/audio|realtime|tts|transcribe|image|search|embedding|instruct|moderation/.test(m.id)),
   gemini: {
     base: 'https://generativelanguage.googleapis.com/v1beta',
+    listHeaders: (key) => ({ 'x-goog-api-key': key }),
     async models(key) {
       const { models } = await api(`${this.base}/models?pageSize=1000`, { headers: { 'x-goog-api-key': key } });
       // No image-input or date field in Gemini's model list: keep generateContent models, order by the
@@ -266,19 +269,43 @@ const PROVIDERS = {
   custom: openaiCompat('', () => true, () => ({ max_tokens: 4096 })),
 };
 
+// Model ids from any common list shape: {data:[…]} (OpenAI), {models:[…]} (Gemini), a bare array;
+// items as strings or objects with id/name. Order kept as the server sent it.
+function anyIds(j, stripModelsPrefix) {
+  const arr = Array.isArray(j) ? j : Array.isArray(j?.data) ? j.data : Array.isArray(j?.models) ? j.models : [];
+  const ids = arr.map((m) => (typeof m === 'string' ? m : m?.id || m?.name)).filter((x) => typeof x === 'string' && x.trim());
+  return [...new Set(stripModelsPrefix ? ids.map((x) => x.replace(/^models\//, '')) : ids)];
+}
+
 // A provider talking to `base` (user setting) instead of its default. Only http(s) URLs are accepted.
+// A gateway/proxy behind a custom base (e.g. gatecheap.vn/v1) lists models without the vendor-specific
+// fields our filters need (capabilities, supportedGenerationMethods, pricing…), and may serve other
+// vendors' models too, so its list is read with anyIds() and nothing is filtered: probe() decides.
 function providerFor(id, base) {
   const P = PROVIDERS[id];
   if (!P) throw new Error('Nhà cung cấp không hợp lệ: ' + id);
   const b = String(base || '').trim().replace(/\/+$/, '');
-  if (!b) {
+  if (!b || b === P.base) {
     if (!P.base) throw new Error('Chưa nhập Base URL cho nhà cung cấp tùy chỉnh.');
     return P;
   }
   let u;
   try { u = new URL(b); } catch { throw new Error('Base URL không hợp lệ: ' + b); }
   if (u.protocol !== 'https:' && u.protocol !== 'http:') throw new Error('Base URL phải bắt đầu bằng http:// hoặc https://');
-  return Object.create(P, { base: { value: b } });
+  return Object.create(P, {
+    base: { value: b },
+    models: {
+      value: async function (key) {
+        try {
+          return anyIds(await api(`${this.base}/models`, { headers: P.listHeaders(key) }), id === 'gemini');
+        } catch (e) {
+          // most OpenAI-style servers live under /v1; a bare host usually answers 404 with an HTML page
+          if (/404/.test(e.message) && !/\/v\d+[a-z]*$/i.test(this.base)) throw new Error(`${e.message} — thử thêm /v1 vào cuối Base URL (vd ${this.base}/v1)`);
+          throw e;
+        }
+      },
+    },
+  });
 }
 
 // Cache by image content + model: MangaDex recreates <img> tags for pages you go back to, and F5 reloads

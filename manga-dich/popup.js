@@ -40,7 +40,7 @@ function showProvider(p) {
   $('key').placeholder = p === 'custom' ? 'Không bắt buộc với server chạy trên máy' : 'Dán API key';
   $('base').value = st.bases[p] || '';
   $('base').placeholder = defaults[p] || 'http://localhost:11434/v1';
-  $('base-hint').textContent = p === 'custom' ? CUSTOM_HINT : 'Để trống để dùng địa chỉ mặc định (chữ mờ trong ô). Chỉ đổi khi dùng proxy hoặc cổng trung gian.';
+  $('base-hint').textContent = p === 'custom' ? CUSTOM_HINT : 'Để trống để dùng địa chỉ mặc định (chữ mờ trong ô). Cổng trung gian kiểu OpenAI (vd https://gatecheap.vn/v1) thì chọn nhà cung cấp "Tùy chỉnh".';
   $('getkey').hidden = !KEY_PAGES[p];
   $('getkey').href = KEY_PAGES[p] || '#';
   $('model').value = st.models[p] || '';

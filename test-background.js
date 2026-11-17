@@ -48,7 +48,7 @@ const call = (msg) => new Promise((res) => listener(msg, null, res));
     const seen = []; const f0 = ctx.fetch;
     ctx.fetch = async (url, init) => { seen.push({ url, auth: init?.headers?.authorization }); return { ok: true, json: async () => ({ data: [{ id: 'gpt-9', created: 2 }, { id: 'llava', created: 1 }] }) }; };
     let r = await call({ type: 'models', provider: 'openai', key: 'k', base: 'https://proxy.example.com/v1/' });
-    assert.deepEqual(r.list, ['gpt-9']); assert.equal(seen.at(-1).url, 'https://proxy.example.com/v1/models');
+    assert.deepEqual(r.list, ['gpt-9', 'llava'], 'behind a custom base nothing is filtered'); assert.equal(seen.at(-1).url, 'https://proxy.example.com/v1/models');
     r = await call({ type: 'models', provider: 'openai', key: 'k', base: '' });
     assert.equal(seen.at(-1).url, 'https://api.openai.com/v1/models', 'empty base = default URL');
     r = await call({ type: 'models', provider: 'custom', key: '', base: 'http://localhost:11434/v1' });
@@ -59,6 +59,32 @@ const call = (msg) => new Promise((res) => listener(msg, null, res));
     assert.match((await call({ type: 'models', provider: 'openai', key: 'k', base: 'javascript:alert(1)' })).error, /http/);
     assert.match((await call({ type: 'models', provider: 'openai', key: 'k', base: 'not a url' })).error, /không hợp lệ/);
     assert.equal(seen.length, n, 'rejected URLs are never fetched');
+
+    // real gateway list (gatecheap.vn/v1/models, OpenAI shape, no `created`): every provider family
+    // must list all of it — before, OpenAI kept only gpt-*, Anthropic returned [], Gemini threw
+    const gw = JSON.parse(fs.readFileSync(__dirname + '/test-fixtures/gateway-models.json', 'utf8'));
+    const want = gw.data.map((m) => m.id);
+    const auth = {};
+    ctx.fetch = async (url, init) => { auth[url] = init.headers; return { ok: true, json: async () => gw }; };
+    for (const p of ['openai', 'anthropic', 'gemini', 'groq', 'openrouter', 'custom']) {
+      const res = await call({ type: 'models', provider: p, key: 'K', base: 'https://gatecheap.vn/v1' });
+      assert.deepEqual(res.list, want, p + ' via gateway');
+    }
+    // the family's own auth header is still sent
+    ctx.fetch = async (url, init) => { auth.last = init.headers; return { ok: true, json: async () => gw }; };
+    await call({ type: 'models', provider: 'anthropic', key: 'K', base: 'https://gw.example/v1' }); assert.equal(auth.last['x-api-key'], 'K');
+    await call({ type: 'models', provider: 'gemini', key: 'K', base: 'https://gw.example/v1' }); assert.equal(auth.last['x-goog-api-key'], 'K');
+    await call({ type: 'models', provider: 'custom', key: 'K', base: 'https://gw.example/v1' }); assert.equal(auth.last.authorization, 'Bearer K');
+    // other list shapes
+    const shape = async (body, provider = 'custom') => { ctx.fetch = async () => ({ ok: true, json: async () => body }); return (await call({ type: 'models', provider, key: '', base: 'http://localhost:1/v1' })).list; };
+    assert.deepEqual(await shape({ models: [{ name: 'models/gemini-x' }, { name: 'models/gemini-y' }] }, 'gemini'), ['gemini-x', 'gemini-y']);
+    assert.deepEqual(await shape(['a', 'b', 'a', '']), ['a', 'b']);
+    assert.deepEqual(await shape({ data: [{ id: 'm1' }, { name: 'm2' }, {}, null] }), ['m1', 'm2']);
+    assert.deepEqual(await shape({ unexpected: true }), []);
+    // bare host: 404 HTML page -> hint to add /v1; a base already ending in /v1 gets no hint
+    ctx.fetch = async () => ({ ok: false, status: 404, json: async () => { throw new SyntaxError('html'); } });
+    assert.match((await call({ type: 'models', provider: 'custom', key: '', base: 'https://gatecheap.vn' })).error, /thêm \/v1.*gatecheap\.vn\/v1/);
+    assert.doesNotMatch((await call({ type: 'models', provider: 'custom', key: '', base: 'https://gatecheap.vn/v1' })).error, /thêm \/v1/);
     ctx.fetch = f0;
   }
 
