@@ -23,7 +23,7 @@
     .md-layer{position:fixed;pointer-events:none;z-index:2147483646}
     .md-b{position:absolute;pointer-events:auto;cursor:pointer;display:flex;align-items:center;justify-content:center;
       text-align:center;background:#fff;color:#111;border-radius:8px;padding:2px;box-sizing:border-box;overflow:hidden;
-      font-family:"Segoe UI",Arial,sans-serif;font-weight:600;line-height:1.15;word-break:break-word}
+      font-family:"Segoe UI",Arial,sans-serif;font-weight:600;line-height:1.15;word-break:break-word;white-space:pre-line}
     .md-b.off{opacity:.08}
     .md-status{position:absolute;top:4px;left:4px;max-width:calc(100% - 24px);background:#000c;color:#fff;font:12px/1.4 sans-serif;padding:4px 8px;border-radius:4px;pointer-events:auto}
     .md-retry{margin-left:6px;padding:2px 10px;border:0;border-radius:4px;background:#ff6740;color:#fff;font:600 12px sans-serif;cursor:pointer}`;
@@ -46,6 +46,8 @@
   // Largest font at which the translation fits its box, found by binary search (the old top-down
   // 1px scan capped every bubble at 22px, so big bubbles got needlessly tiny text). Floor 8px,
   // ceiling 30px: past that the box is bigger than any bubble's text should be.
+  // 1px steps (not 2): with pre-wrapped lines the text no longer reflows when the font changes,
+  // so the fit is exact and the extra iterations are cheap (≤4 more).
   const fits = (b) => b.scrollHeight <= b.clientHeight + 1 && b.scrollWidth <= b.clientWidth + 1;
   const fit = (b) => {
     let lo = 8, hi = 30, best = 8;
@@ -97,7 +99,7 @@
     return best;
   }
 
-  async function translate(img, context, urgent) {
+  async function translate(img, context, urgent, forced = false) {
     img.dataset.mdDone = '1';
     const el = document.createElement('div');
     el.className = 'md-layer';
@@ -122,7 +124,11 @@
       for (const t of list) {
         const b = document.createElement('div');
         b.className = 'md-b';
-        b.textContent = t.text;
+        // Line breaks chosen for THIS bubble's shape (a narrow bubble gets short, few-word lines),
+        // then white-space:pre-line renders them verbatim — the fit below only scales the font.
+        b.textContent = (typeof wrapText === 'function' ? wrapText(t.text, t.w / t.h) : t.text);
+        b.dataset.text = JSON.stringify({ text: t.text, sfx: !!t.sfx }); // SFX toggle re-wraps without a new call
+        b.dataset.ar = t.w / t.h;
         b.title = 'Bấm để ẩn/hiện bản dịch';
         Object.assign(b.style, { left: t.x + '%', top: t.y + '%', width: t.w + '%', height: t.h + '%' },
           t.bg && { background: t.bg, color: t.fg }); // dark/coloured bubbles keep their look
@@ -135,6 +141,27 @@
     };
     try {
       const { msg, px } = encode(img);
+      // Textless pages (cover art, full-page illustrations) cost a full API call for nothing.
+      // The pixel detector runs locally on the same ImageData the fit already uses; when it says
+      // no text, show a small badge with an override instead of calling the model. A tainted
+      // canvas (px == null) can't be checked, so those pages always translate.
+      if (px && typeof hasText === 'function' && window.__md.textOnly && !forced && !hasText(px).has) {
+        img.dataset.mdDone = 'skip'; // not '1': "Vẫn dịch" must be able to retry it
+        status.textContent = 'Trang không có chữ — bỏ qua để tiết kiệm lượt gọi';
+        const force = document.createElement('button');
+        force.className = 'md-retry';
+        force.textContent = 'Vẫn dịch';
+        force.onclick = () => { // override once: mark translated and re-enter the pipeline
+          const k = overlays.indexOf(o);
+          if (k >= 0) overlays.splice(k, 1);
+          o.el.remove();
+          translate(img, context, urgent, true); // forced: skips the detector, straight to the API
+        };
+        status.append(force);
+        el.replaceChildren(status);
+        clearInterval(timer);
+        return;
+      }
       // Draft-first: open a port so the worker can push the read pass's boxes the moment they
       // exist, then swap in the polished text when it lands. Visible page = 1 call to first paint.
       const portName = 'md-draft-' + Math.random().toString(36).slice(2);
@@ -192,7 +219,33 @@
   addEventListener('resize', place);
   setInterval(() => { place(); pump(); }, 700); // page flips by keyboard/click don't scroll
 
-  window.__md = { overlays, pump };
+  // SFX toggle from the popup: every fitted bubble carries its raw text (bubbles translated with
+  // the other setting are filtered out), so swapping = re-wrap what's left and re-fit in place —
+  // no API call, no page flip, works on drafts too.
+  const setSfx = (on) => {
+    window.__md.sfx = on;
+    for (const o of overlays) {
+      for (const b of o.el.querySelectorAll('.md-b[data-text]')) {
+        const t = JSON.parse(b.dataset.text || '[]');
+        if (t.sfx) b.remove();
+        else b.textContent = (typeof wrapText === 'function' ? wrapText(t.text, +b.dataset.ar) : t.text);
+      }
+      o.fitW = null;
+    }
+    place();
+  };
+
+  window.__md = { overlays, pump, setSfx, glossary: '', textOnly: true, sfx: true };
+  chrome.storage.local.get(['sfx', 'textOnly']).then((s) => {
+    window.__md.sfx = s.sfx ?? true;
+    window.__md.textOnly = s.textOnly ?? true;
+  });
+  // the popup flips the switches while this script keeps running: apply them live
+  chrome.storage.onChanged.addListener((ch, area) => {
+    if (area !== 'local') return;
+    if (ch.sfx) setSfx(ch.sfx.newValue ?? true);
+    if (ch.textOnly) window.__md.textOnly = ch.textOnly.newValue ?? true;
+  });
   if (!next()) alert('Manga Dịch: không thấy trang truyện nào. Sẽ tự dịch khi trang truyện hiện ra.');
   pump();
 })();

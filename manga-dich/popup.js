@@ -104,7 +104,7 @@ async function findModels() {
   }
 }
 
-const POPUP_API = 4; // must equal API in background.js
+const POPUP_API = 5; // must equal API in background.js
 
 // Old background still running (files updated, extension not reloaded): say so and offer the fix,
 // instead of failing later with errors that point at the wrong thing.
@@ -119,10 +119,12 @@ $('reload').onclick = () => chrome.runtime.reload(); // restarts the worker with
 
 (async () => {
   if (!(await backgroundIsCurrent())) return;
-  st = await chrome.storage.local.get(['provider', 'keys', 'models', 'bases', 'polish']);
+  st = await chrome.storage.local.get(['provider', 'keys', 'models', 'bases', 'polish', 'sfx', 'textOnly']);
   st.keys ||= {}; st.models ||= {}; st.bases ||= {};
   ({ bases: defaults } = await send({ type: 'defaults' }).catch(() => ({ bases: {} })));
   $('polish').checked = st.polish ?? true;
+  $('sfx').checked = st.sfx ?? true;
+  $('textOnly').checked = st.textOnly ?? true;
   $('provider').value = st.provider || 'gemini';
   showProvider(prov());
   if (!st.models[prov()] && (st.keys[prov()] || st.bases[prov()])) findModels();
@@ -153,6 +155,9 @@ $('save').onclick = async () => {
 };
 
 $('polish').onchange = () => chrome.storage.local.set({ polish: $('polish').checked });
+// sfx/textOnly flip live: content.js listens to storage.onChanged and re-renders without new calls
+$('sfx').onchange = () => chrome.storage.local.set({ sfx: $('sfx').checked });
+$('textOnly').onchange = () => chrome.storage.local.set({ textOnly: $('textOnly').checked });
 
 $('model').onchange = async () => {
   const p = prov(), picked = $('model').value.trim();
@@ -165,6 +170,6 @@ $('model').onchange = async () => {
 
 $('go').onclick = async () => {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['fit.js', 'content.js'] });
+  await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['fit.js', 'text.js', 'content.js'] });
   window.close();
 };

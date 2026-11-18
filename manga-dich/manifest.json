@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Dịch Truyện",
-  "version": "0.2",
+  "version": "0.3",
   "description": "Dịch trang truyện tranh sang tiếng Việt bằng AI.",
   "permissions": ["storage", "activeTab", "scripting"],
   "host_permissions": ["<all_urls>"],

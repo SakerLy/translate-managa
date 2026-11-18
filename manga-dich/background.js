@@ -35,7 +35,8 @@ VÍ DỤ (bong bóng có chữ nằm ở nửa trên bên trái, chiếm khoản
 const pageJob = (withSrc) => ({
   name: 'bubbles',
   // src (the original text) is only needed by polish(); it costs ~500 output tokens a page, so skip it otherwise
-  system: SYSTEM + ' ' + (withSrc ? 'Mỗi mục thêm "src": chữ gốc đúng như trong ảnh (bên cạnh "text" là bản dịch).' : ''),
+  system: SYSTEM + ' ' + (withSrc ? 'Mỗi mục thêm "src": chữ gốc đúng như trong ảnh (bên cạnh "text" là bản dịch).' : '')
+    + ' Đánh dấu "sfx": true cho MỌI mục là từ tượng thanh (SFX) — kể cả SFX dài/trang trí.',
   schema: {
     type: 'object', additionalProperties: false, required: ['bubbles'],
     properties: {
@@ -43,7 +44,12 @@ const pageJob = (withSrc) => ({
         type: 'array',
         items: {
           type: 'object', additionalProperties: false, required: ['box_2d', ...(withSrc ? ['src'] : []), 'text'],
-          properties: { box_2d: { type: 'array', items: { type: 'number' } }, ...(withSrc && { src: { type: 'string' } }), text: { type: 'string' } },
+          properties: {
+            box_2d: { type: 'array', items: { type: 'number' } },
+            ...(withSrc && { src: { type: 'string' } }),
+            text: { type: 'string' },
+            sfx: { type: 'boolean' }, // true = onomatopoeia/SFX; filtered out when the user turns SFX off
+          },
         },
       },
     },
@@ -223,11 +229,11 @@ function parseBubbles(text) {
   // another scale (e.g. pixels): drop the box instead of clamping it into a page-covering white block.
   // A box over 25% of the page is never one speech bubble (largest on the test page is ~3.4%).
   const c = (v) => Math.min(1000, Math.max(0, v * x10)) / 10;
-  return bubbles.flatMap(({ box_2d: b, text: t, src }) => {
+  return bubbles.flatMap(({ box_2d: b, text: t, src, sfx }) => {
     if (!t?.trim() || !Array.isArray(b) || b.length !== 4 || !b.every((v) => Number.isFinite(v) && v >= -10 && v <= 1010)) return [];
     const [y0, x0, y1, x1] = [c(Math.min(b[0], b[2])), c(Math.min(b[1], b[3])), c(Math.max(b[0], b[2])), c(Math.max(b[1], b[3]))];
     const w = x1 - x0, h = y1 - y0;
-    return w > 0 && h > 0 && w * h <= 2500 ? [{ x: x0, y: y0, w, h, text: t.trim(), ...(src && { src }) }] : [];
+    return w > 0 && h > 0 && w * h <= 2500 ? [{ x: x0, y: y0, w, h, text: t.trim(), ...(src && { src }), ...(sfx && { sfx: true }) }] : [];
   });
 }
 
@@ -385,7 +391,7 @@ function providerFor(id, base) {
 // Cache by image content + model: MangaDex recreates <img> tags for pages you go back to, and F5 reloads
 // them, so without this the same page is paid for again. Entries are ~1-2 KB; keep the newest CACHE_MAX.
 // Bump CACHE_V when the prompt changes, so results from the old prompt don't shadow the new ones.
-const CACHE_MAX = 500, CACHE_V = 2;
+const CACHE_MAX = 500, CACHE_V = 3;
 async function cacheKey(model, data) {
   const h = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(data)));
   return 'c:' + model + ':v' + CACHE_V + ':' + [...h.slice(0, 16)].map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -474,19 +480,23 @@ async function run(item) {
 // translate(): resolve provider + cache check, then hand the work to the queue
 async function translate({ data, mime, url, context, glossary = '', urgent, onDraft }) {
   if (!data) ({ data, mime } = await fetchImage(url));
-  const { provider = 'anthropic', keys = {}, models = {}, bases = {}, polish: doPolish = true } = await chrome.storage.local.get(['provider', 'keys', 'models', 'bases', 'polish']);
+  const { provider = 'anthropic', keys = {}, models = {}, bases = {}, polish: doPolish = true, sfx = true }
+    = await chrome.storage.local.get(['provider', 'keys', 'models', 'bases', 'polish', 'sfx']);
   if ((!keys[provider] && provider !== 'custom') || !models[provider]) throw new Error('Chưa nhập API key / chọn model (bấm icon extension).');
-  const key = await cacheKey(models[provider] + (doPolish ? '+p' : ''), data);
+  // sfx rides in the cache key: the same page under the other setting must not shadow it
+  const key = await cacheKey(models[provider] + (doPolish ? '+p' : '') + (sfx ? '' : '-sfx'), data);
   const hit = (await chrome.storage.local.get(key))[key];
   if (hit) return { bubbles: hit.bubbles, glossary }; // same page already translated by this model: no API call
-  const job = { key, data, mime, context, glossary, provider, base: bases[provider], model: models[provider], apiKey: keys[provider], doPolish };
+  const job = { key, data, mime, context, glossary, provider, base: bases[provider], model: models[provider], apiKey: keys[provider], doPolish, sfx };
   return new Promise((resolve) => enqueue(key, job, urgent, resolve, onDraft));
 }
 
 // Returns { bubbles, glossary }. glossary (pronoun pairs for this tab) only changes when polish runs.
 // onDraft(bubbles): called with the read pass's boxes as soon as they exist, before polish.
+// sfx=false drops the model's SFX-tagged bubbles before polish and before the draft is pushed,
+// so both paints and the cache agree on what the user asked to see.
 async function translateJob(job, onDraft) {
-  const { key, data, mime, context, glossary = '', provider, base, model, apiKey, doPolish } = job;
+  const { key, data, mime, context, glossary = '', provider, base, model, apiKey, doPolish, sfx = true } = job;
   const P = providerFor(provider, base);
   const prompt = context ? `Lời thoại trang trước (giữ xưng hô nhất quán):\n${context}` : 'Đây là trang đầu tiên.';
   const call = () => P.translate(apiKey, model, { data, mime }, prompt, undefined, pageJob(doPolish));
@@ -494,6 +504,7 @@ async function translateJob(job, onDraft) {
   // a page that clearly has text but came back with zero boxes is a model flake (seen with gpt-5.6-sol,
   // 1 run in 7): one retry, not a loop — a genuinely textless page pays a second call instead of lying
   if (!bubbles.length) bubbles = parseBubbles(await call());
+  if (!sfx) bubbles = bubbles.filter((b) => !b.sfx); // user turned SFX off: drop tagged bubbles
   onDraft?.(bubbles);
   let g = glossary;
   if (doPolish) {
@@ -511,7 +522,7 @@ async function translateJob(job, onDraft) {
 // reads its files fresh from disk, but this service worker keeps running the old code until the extension
 // is reloaded; a real report ("Cannot read properties of undefined (reading 'translate')") was a new popup
 // talking to an old worker that had no 'custom' provider.
-const API = 4;
+const API = 5;
 
 // Draft-first streaming: content.js opens a port named "md-draft-<imgsrc-hash>" and names it in the
 // translate message; while that page's job runs we hold the port and push the read pass's boxes
