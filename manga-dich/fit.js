@@ -34,8 +34,12 @@ function fitBubbles(px, bubbles, anchor = true) {
   // into the neighbouring bubble's text). When two model boxes overlap - both aimed at the same
   // bubble after a merge miss - the NEARER box wins, so the duplicate can't grow on the same ink
   // and stays visibly empty instead of covering the twin's translation. me < 0: no ownership check.
-  const othersOwn = (me, cx, cy) => me >= 0 && boxes.some((o, j) => j !== me && cx >= o[0] && cx < o[2] && cy >= o[1] && cy < o[3]
-    && (Math.hypot(cx - centres[j][0], cy - centres[j][1]) <= Math.hypot(cx - centres[me][0], cy - centres[me][1])));
+  // A letter inside another box but outside mine is theirs, however far their centre is (live Sangeki
+  // run: a tall neighbour's first line sat nearer to MY centre, so my box swallowed it and doubled).
+  // The centre distance only settles letters inside both boxes.
+  const inBox = (o, cx, cy) => cx >= o[0] && cx < o[2] && cy >= o[1] && cy < o[3];
+  const othersOwn = (me, cx, cy) => me >= 0 && boxes.some((o, j) => j !== me && inBox(o, cx, cy)
+    && (!inBox(boxes[me], cx, cy) || Math.hypot(cx - centres[j][0], cy - centres[j][1]) <= Math.hypot(cx - centres[me][0], cy - centres[me][1])));
 
   // Ink blobs (connected non-background pixels) in a window. Letters are small blobs; bubble outlines,
   // panel borders and artwork are big ones. Bubbles that spill over panel borders are common in manga,
@@ -47,11 +51,12 @@ function fitBubbles(px, bubbles, anchor = true) {
     for (let sy = wy0; sy < wy1; sy++) for (let sx = wx0; sx < wx1; sx++) {
       const s0 = (sy - wy0) * ww + (sx - wx0);
       if (label[s0] || near(at(sx, sy), bg)) continue;
-      const id = blobs.length + 1, bl = { x0: sx, y0: sy, x1: sx, y1: sy, edge: false };
+      const id = blobs.length + 1, bl = { x0: sx, y0: sy, x1: sx, y1: sy, edge: false, n: 0 };
       label[s0] = id;
       const stack = [sx, sy];
       while (stack.length) {
         const y = stack.pop(), x = stack.pop();
+        bl.n++;
         if (x < bl.x0) bl.x0 = x; if (x > bl.x1) bl.x1 = x; if (y < bl.y0) bl.y0 = y; if (y > bl.y1) bl.y1 = y;
         if (x === wx0 || y === wy0 || x === wx1 - 1 || y === wy1 - 1) bl.edge = true;
         for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
@@ -63,7 +68,11 @@ function fitBubbles(px, bubbles, anchor = true) {
       }
       blobs.push(bl);
     }
-    return blobs.filter((bl) => !bl.edge && bl.x1 - bl.x0 < maxSize && bl.y1 - bl.y0 < maxSize
+    // past normal letter size only solid shapes count: a shouted letter is a thick stroke, a piece of the
+    // bubble's outline is a thin arc filling little of its box (live run: an outline arc pulled a "!" box
+    // across a face)
+    const solid = (bl) => (bl.x1 - bl.x0 < CHAR && bl.y1 - bl.y0 < CHAR) || bl.n >= 0.15 * (bl.x1 - bl.x0 + 1) * (bl.y1 - bl.y0 + 1);
+    return blobs.filter((bl) => !bl.edge && bl.x1 - bl.x0 < maxSize && bl.y1 - bl.y0 < maxSize && solid(bl)
       && !othersOwn(me, (bl.x0 + bl.x1) / 2, (bl.y0 + bl.y1) / 2));
   };
 
@@ -149,7 +158,10 @@ function fitBubbles(px, bubbles, anchor = true) {
     // lh: the source lettering's height (median letter, % of page height) - the translation's font is sized
     // from it, so a short line in a roomy bubble isn't blown up and a long one isn't shrunk to dust
     const kept = (r, how, used = r.letters) => {
-      const hs = (used || []).map((bl) => bl.y1 - bl.y0 + 1).sort((a, z) => a - z);
+      // heights of real strokes only: JPEG specks (1-2px) sit around every letter and dragged the median to
+      // 1px, so every box on a live Sangeki page was thrown away as "dust" (and flagged mixed); they're still
+      // covered by the box, they just don't vote on the lettering size
+      const hs = (used || []).map((bl) => bl.y1 - bl.y0 + 1).filter((h) => h >= 3).sort((a, z) => a - z);
       // a "text" of 1-3px tall blobs is dust/screentone (live MangaDex run: shrink locked onto it, lh=0.1%,
       // and the bubble's translation vanished into a 3%-wide box): give the model's box back instead
       if (!hs.length || hs[hs.length >> 1] < Math.max(4, 0.006 * H)) return { b: { ...b, ...style, fit: 'kept' } };
@@ -365,4 +377,29 @@ function textBlocks(px) {
     out.push({ x: x0 / gw * 100, y: y0 / gh * 100, w: bw / gw * 100, h: bh / gh * 100, n: g.length });
   }
   return out;
+}
+
+// Two fitted boxes that still overlap (a bubble's box and a neighbouring shout/SFX box, live Sangeki run:
+// "Gahaha!" hid the first words of the bubble beside it). Nothing moves - moving put text off its bubble -
+// the box with less text gives up the overlap along whichever side costs it the least area, as long as it
+// keeps at least 40% of itself; otherwise both stay and the longer text is drawn on top.
+// eslint-disable-next-line no-unused-vars
+function trimOverlaps(list) {
+  const out = list.map((b) => ({ ...b }));
+  for (let i = 0; i < out.length; i++) for (let j = 0; j < out.length; j++) {
+    if (i === j) continue;
+    const a = out[i], b = out[j];
+    if ((a.text || '').length < (b.text || '').length || ((a.text || '').length === (b.text || '').length && i > j)) continue; // b is the smaller text
+    const ix = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x), iy = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+    if (ix <= 0 || iy <= 0) continue;
+    // a blind box (no source letters under it) lying on another box's bubble was put there by mistake: it
+    // can't be shown right there, so it goes (the missed-text pass re-reads any lettering left uncovered)
+    if (b.fit === 'kept' && a.fit !== 'kept' && ix * iy >= 0.3 * b.w * b.h) { b.drop = true; continue; }
+    const cut = [ // b trimmed so it ends where a begins, or starts where a ends
+      { x: b.x, y: b.y, w: a.x - b.x, h: b.h }, { x: a.x + a.w, y: b.y, w: b.x + b.w - (a.x + a.w), h: b.h },
+      { x: b.x, y: b.y, w: b.w, h: a.y - b.y }, { x: b.x, y: a.y + a.h, w: b.w, h: b.y + b.h - (a.y + a.h) },
+    ].filter((c) => c.w > 0 && c.h > 0).sort((p, q) => q.w * q.h - p.w * p.h)[0];
+    if (cut && cut.w * cut.h >= 0.4 * b.w * b.h) Object.assign(b, cut);
+  }
+  return out.filter((b) => !b.drop);
 }

@@ -80,6 +80,26 @@ console.log('wide box shrink OK');
 }
 console.log('anchor to text OK');
 
+// overlapping fitted boxes: the shorter text gives up the overlap, nothing moves (live run: "Gahaha!" over a bubble)
+{
+  const trim = vm.runInContext('trimOverlaps', fctx);
+  const long = { x: 60, y: 70, w: 20, h: 12, text: 'Này, cậu làm tổn thương tình cảm một người đàn ông thế là không được đâu đấy!' };
+  const short = { x: 55, y: 72, w: 8, h: 5, text: 'Gahaha!' };
+  const [l, s2] = trim([long, short]);
+  assert.deepEqual([l.x, l.y, l.w, l.h], [60, 70, 20, 12], 'long text keeps its box');
+  assert.ok(s2.x + s2.w <= 60 + 1e-9 && s2.x === 55, 'short box trimmed to end where the long one starts: ' + JSON.stringify(s2));
+  const swallowed = trim([long, { x: 62, y: 72, w: 6, h: 4, text: 'Ơ' }])[1]; // fully inside: trimming would lose it all
+  assert.deepEqual([swallowed.x, swallowed.w], [62, 6], 'never trimmed below 40% - left as is');
+}
+{
+  const trim = vm.runInContext('trimOverlaps', fctx);
+  const long = { x: 60, y: 70, w: 20, h: 12, text: 'Này, cậu làm tổn thương tình cảm một người đàn ông thế là không được đâu đấy!' };
+  // a blind box (no letters under it) on another box's bubble is dropped, not shredded
+  const kept = trim([{ ...long, fit: 'letters' }, { x: 73.5, y: 72, w: 7.4, h: 9.2, text: 'Gahaha!', fit: 'kept' }]);
+  assert.equal(kept.length, 1, 'blind box on a fitted bubble dropped');
+}
+console.log('overlap trim OK');
+
 // ---------- background: schema + prompts ----------
 const bctx = { AbortSignal, crypto, TextEncoder, URL, setTimeout, clearTimeout, console, btoa,
   chrome: { runtime: { onMessage: { addListener() {} }, onConnect: { addListener() {} } }, storage: { local: { get: async () => ({}), set: async () => {} } } } };

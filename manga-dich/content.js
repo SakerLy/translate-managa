@@ -295,7 +295,8 @@
       // Pixel-fitted boxes already sit on their own letters and never overlap (fit.js stops each one at its
       // neighbours); pushing them apart moved a translation off its bubble (real run: "Với lại…" shoved up
       // over the art, its Indonesian text left showing). Only raw model boxes still need separate().
-      const separated = list.some((t) => t.fit) ? list.slice() : separate(list.slice());
+      const separated = list.some((t) => t.fit) ? (typeof trimOverlaps === 'function' ? trimOverlaps(list) : list.slice()) : separate(list.slice());
+      separated.sort((a, z) => (a.text || '').length - (z.text || '').length); // still overlapping: longer text drawn on top
       // boxes without their own letter height (blind/anchored) borrow the page's typical one
       const lhs = separated.map((t) => t.lh).filter(Boolean).sort((a, z) => a - z);
       const pageLh = lhs.length ? lhs[lhs.length >> 1] : 0;
