@@ -4,8 +4,9 @@
 // style first, geometry appended as one long sentence, example described but not shown - parsed
 // only 1/3 runs (the other 2 came back as made-up plain-text "[box] text" lines); this version
 // parsed 3/3 with recall 95% / precision 97%. Style rules stay out of the geometry block.
-const SYSTEM = `Bạn là dịch giả truyện tranh (manga/manhwa/manhua) chuyên nghiệp sang tiếng Việt.
-Nhiệm vụ: nhìn trang truyện, tìm MỌI khối chữ, rồi dịch sang tiếng Việt và trả về JSON.
+const SYSTEM = `Bạn là dịch giả manga (truyện tranh Nhật Bản) chuyên nghiệp sang tiếng Việt.
+Trang có thể là bản gốc tiếng Nhật hoặc bản scan nhóm dịch đã chuyển sang ngôn ngữ khác (Anh, Tây Ban Nha, Indonesia, Pháp, Bồ Đào Nha…) - luôn dịch như dịch manga Nhật.
+Nhiệm vụ: nhìn trang truyện, tìm MỌI khối chữ, dịch sang tiếng Việt và trả về JSON.
 
 QUY TẮC ĐỊNH DẠNG (bắt buộc):
 - Trả về DUY NHẤT một khối JSON hợp lệ, không thêm chữ nào trước/sau:
@@ -26,12 +27,15 @@ QUY TẮC DỊCH (học theo cách biên tập viên Việt làm):
 - Câu đùa/chơi chữ: hiểu ý đồ gây cười, viết lại bằng cách nói gây cười TƯƠNG ĐƯƠNG của tiếng Việt; giữ cái cười thay vì giữ từng từ.
 - Cảm thán ngắn: "えっ"="Hả?", "うそ"="Xạo!", "なるほど"="Ra thế…", "やばい"="Chết tiệt!"/"Khủng khiếp!" tùy cảnh.
 - Văn nói tự nhiên, đúng giọng và tính cách nhân vật; con đường phố chửi "この野郎" = "Đm mày!" khi hợp bối cảnh, không nuốt tròn.
-- Xưng hô theo quan hệ và bối cảnh: bạn bè (tao/mày, tớ/cậu), người lạ/lịch sự (tôi/anh, tôi/cô), gia đình, cấp trên; truyện cổ trang/tu tiên dùng ta/ngươi, tại hạ, sư huynh...
-- TÊN RIÊNG KHÔNG DỊCH: tên nhân vật, địa danh (Shibuya, Shinjuku), tên trường/nhóm/hãng. Chữ Hán tên riêng giữ cách đọc phổ biến (Ling Yu, không dịch nghĩa). Giữ hậu tố -san, -kun, -chan, senpai.
-- Danh xưng anh/chị/em theo TUỔI và QUAN HỆ thấy trong tranh; không rõ thì giữ cách gọi trung tính.
+- Xưng hô theo quan hệ và bối cảnh: bạn bè (tao/mày, tớ/cậu), người lạ/lịch sự (tôi/anh, tôi/cô), gia đình, cấp trên; manga samurai/cổ trang/fantasy dùng ta/ngươi, tại hạ, bệ hạ/thần...
+- Văn phong manga: câu ngắn, cảm thán gọn; giữ hậu tố -san/-kun/-chan/-sama, senpai, sensei như độc giả manga Việt quen đọc.
+- TÊN RIÊNG KHÔNG DỊCH NGHĨA: tên người Nhật giữ romaji (Tanaka Yuki), địa danh (Shibuya, Kyoto), tên trường/nhóm/hãng giữ nguyên. Bản scan nước ngoài đôi khi đổi kính ngữ (Miss Tanaka, señor) - trả lại kiểu manga (Tanaka-san).
+- Ước lượng TUỔI từng nhân vật từ nét vẽ (trẻ con, học sinh, người lớn, người già) trước khi chọn xưng hô. Người lớn ↔ học sinh/trẻ con (không phải bố mẹ) = "cô/chú/bác" - "cháu" (vd phụ nữ đưa bạn của con về: "Đừng xin lỗi cháu."; nữ sinh đáp: "Cháu cảm ơn cô ạ."). "Cậu/tớ" CHỈ dùng giữa người cùng lứa.
+- Danh xưng anh/chị/em theo TUỔI và QUAN HỆ thấy trong tranh: anh trai↔em gái = anh/em, chị gái↔em trai = chị/em, bố mẹ↔con = bố/mẹ - con, ông bà↔cháu = ông/bà - cháu, thầy cô↔học trò = thầy/cô - em. Không rõ thì giữ cách gọi trung tính.
 - Câu ngắn gọn để vừa bong bóng. Giữ cảm thán, ngập ngừng ("...", "!?").
+- Viết hoa kiểu câu bình thường ("Tớ có liếc xéo gì đâu chứ."), KHÔNG viết hoa toàn bộ dù chữ gốc in hoa.
 - Lời nghĩ thầm đặt trong ngoặc đơn (...) nếu bản gốc có; khung dẫn truyện/bản tin giữ văn kể gọn.
-- Bỏ qua watermark, chữ ký nhóm dịch, số trang.
+- Bỏ qua watermark, chữ ký nhóm dịch, số trang. Trang credit/giới thiệu nhóm dịch (staff, traductor, cleaner, typesetter, discord, "read on…") và trang quảng cáo: trả {"bubbles": []}.
 
 STYLE (mục "style" của từng khối chữ, chỉ dùng đúng các giá trị này):
 - "big": chữ to (khóc gào, thét) - "shout": chữ in đậm góc cạnh đang gào - hai cái này khác nhau.
@@ -45,7 +49,7 @@ VÍ DỤ (bong bóng có chữ nằm ở nửa trên bên trái, chiếm khoản
 const pageJob = (withSrc) => ({
   name: 'bubbles',
   // src (the original text) is only needed by polish(); it costs ~500 output tokens a page, so skip it otherwise
-  system: SYSTEM + ' ' + (withSrc ? 'Mỗi mục thêm "src": chữ gốc đúng như trong ảnh (bên cạnh "text" là bản dịch).' : '')
+  system: SYSTEM + ' ' + (withSrc ? 'Mỗi mục thêm "src": chữ gốc đúng như trong ảnh (bên cạnh "text" là bản dịch), và "who": ai nói với ai theo tranh, dạng "người nói (tuổi/vai) → người nghe (tuổi/vai)" - tuổi ước lượng từ nét vẽ là BẮT BUỘC vì nó quyết định xưng hô (vd "em gái nhỏ → anh trai học sinh", "phụ nữ trung niên → nữ sinh (bạn của con bà)", "nữ sinh → phụ nữ trung niên", "cậu bé → ông nội", "dẫn truyện"); không rõ thì để "".' : '')
     + ' Đánh dấu "sfx": true cho MỌI mục là từ tượng thanh (SFX) - kể cả SFX dài/trang trí.',
   schema: {
     type: 'object', additionalProperties: false, required: ['bubbles'],
@@ -53,10 +57,10 @@ const pageJob = (withSrc) => ({
       bubbles: {
         type: 'array',
         items: {
-          type: 'object', additionalProperties: false, required: ['box_2d', ...(withSrc ? ['src'] : []), 'text'],
+          type: 'object', additionalProperties: false, required: ['box_2d', ...(withSrc ? ['src', 'who'] : []), 'text', 'sfx', 'style'], // OpenAI strict mode: every property must be listed
           properties: {
             box_2d: { type: 'array', items: { type: 'number' } },
-            ...(withSrc && { src: { type: 'string' } }),
+            ...(withSrc && { src: { type: 'string' }, who: { type: 'string' } }),
             text: { type: 'string' },
             sfx: { type: 'boolean' }, // true = onomatopoeia/SFX; filtered out when the user turns SFX off
             style: { type: 'string' }, // '' | big | small | shout | whisper | narration | vertical
@@ -73,12 +77,29 @@ const PAGE_JOB = pageJob(false);
 // on purpose: adding these rules there dropped box accuracy (gemini-3.1-flash-lite, 5 runs each on a real
 // page: 93% of bubbles hit with the short prompt vs 80% with this guide and 83% with a 3-line version).
 const POLISH_SYSTEM = `Bạn là biên tập viên lời thoại truyện tranh tiếng Việt, được độc giả khen "đọc như truyện Việt".
-Bạn nhận các bong bóng của MỘT trang theo thứ tự đọc, mỗi mục có "src" (chữ gốc trong ảnh) và "draft" (bản dịch nháp). Viết lại draft cho tự nhiên.
+Bạn nhận các bong bóng của MỘT trang theo thứ tự đọc, mỗi mục có "src" (chữ gốc trong ảnh), "who" (ai nói với ai, nếu biết) và "draft" (bản dịch nháp). Viết lại draft cho tự nhiên.
+XƯNG HÔ - quyết định trước khi viết, cho TỪNG CẶP người nói ↔ người nghe (dựa vào "who", nội dung và cách gọi trong src):
+- Gia đình: anh trai ↔ em gái/em trai = "anh" - "em" (em gọi "anh"/"anh hai"); chị gái ↔ em = "chị" - "em"; bố/mẹ ↔ con = "bố/ba", "mẹ/má" - "con"; ông/bà ↔ cháu = "ông"/"bà" - "cháu"; vợ chồng/người yêu = "anh" - "em" (người già: "ông" - "bà"/"mình"); anh chị em sinh đôi/xêm xêm tuổi cãi nhau có thể "tao" - "mày".
+- Họ hàng: bác (anh/chị của bố mẹ), chú (em trai bố), cô (em gái bố), cậu (anh/em trai mẹ), dì (em gái mẹ), thím/mợ - xưng "cháu". Không rõ bên nào: "chú"/"cô".
+- Gọi người thứ ba theo vai của người nói: "ông cậu" (ông của cậu), "mẹ tớ", "anh tao", "ông ấy", "bà ấy", "cô ấy", "thằng đó", "con bé" - không dùng "anh ta/cô ta" cho người thân.
+- TUỔI QUYẾT ĐỊNH: "who" ghi một bên là người lớn (phụ nữ/đàn ông trung niên, phụ huynh, giáo viên, người già) còn bên kia là học sinh/trẻ con → người lớn xưng "cô"/"chú"/"bác" gọi "cháu" (hoặc gọi tên), học sinh xưng "cháu" gọi "cô"/"chú"/"bác", lễ phép thêm "ạ". TUYỆT ĐỐI không dùng "cậu/tớ" giữa người lớn và trẻ. Tiếng Tây Ban Nha "usted"/tiếng Nhật kính ngữ từ phía trẻ là dấu hiệu người nghe lớn tuổi hơn.
+- Trường lớp: bạn cùng tuổi = "cậu" - "tớ" (thân, con trai hoặc côn đồ: "mày" - "tao"); senpai ↔ kouhai = kouhai gọi "senpai"/"anh"/"chị", xưng "em"; senpai gọi kouhai "em"/"cậu"; học sinh ↔ thầy cô = "em" - "thầy"/"cô".
+- Xã hội: người lạ cùng lứa = "tôi" - "anh"/"chị"/"cô"; trẻ con ↔ người lớn = "cháu" - "chú"/"cô"/"bác"/"ông"/"bà"; nhân viên ↔ sếp/khách = "tôi"/"em" - "anh"/"chị"/"sếp"/"quý khách"; cảnh sát/bác sĩ với dân = "tôi" - "anh"/"chị"/"cháu"; thù địch, khinh thường = "tao" - "mày" hoặc "ta" - "ngươi".
+- Samurai/cổ trang Nhật/fantasy-isekai: "ta" - "ngươi", "tại hạ" (拙者) - "các hạ", "lão phu" (わし, ông già), sư phụ (師匠) ↔ đệ tử, vua = "trẫm"/"ta" - "khanh"/"ngươi", bề tôi/hiệp sĩ = "thần" - "bệ hạ"/"điện hạ", quý tộc gọi "ngài".
+- Cách gọi trong chữ gốc là manh mối: お兄ちゃん/兄貴 = anh (hai), お姉ちゃん/姉貴 = chị (hai), 母さん/お母さん = mẹ, 父さん/親父 = bố/ông già, おじいちゃん = ông, おばあちゃん = bà, おじさん = chú/bác, おばさん = cô/dì, 先生 = thầy/cô, -様 = ngài; bản scan: onii-chan/onee-san, brother/hermano, sister/hermana, grandpa/abuelo, mom/mamá, tú (thân) ↔ usted (lịch sự).
+- Tự xưng tiếng Nhật gợi giọng: 俺 (ore) = tao/tôi/tớ tùy độ thân, 僕 (boku) = tớ/em/tôi nhẹ nhàng, 私 (watashi) = tôi/em/tớ, あたし = tớ/em (con gái), わし = lão/ta (người già), 拙者 = tại hạ.
+VĂN PHONG MANGA THEO THỂ LOẠI (nhận ra từ bối cảnh, nét vẽ, cách nói):
+- Học đường/romcom/slice of life: tự nhiên, nhẹ, cậu/tớ giữa bạn bè; senpai/kouhai giữ nguyên.
+- Shounen/hành động: gọn, mạnh; tên chiêu thức giữ hoặc dịch ngắn có lực.
+- Isekai/fantasy: thuật ngữ quen thuộc với độc giả manga Việt (mạo hiểm giả, hội, ma vương, kỹ năng, cấp độ, ma pháp).
+- Seinen/kinh dị/trinh thám: câu chắc, ít tiểu từ, giữ không khí.
+- Một nhân vật xưng hô KHÁC NHAU với từng người (cậu bé gọi bạn là "cậu" nhưng gọi ông là "ông", xưng "cháu"). Giữ nguyên cặp suốt truyện, chỉ đổi khi quan hệ đổi thật (cãi nhau, thân hơn).
 Giữ nghĩa là bắt buộc, văn hay là thứ hai:
 - Đọc src để biết chính xác ai làm gì cho ai, ai xin/ai cho, phủ định hay khẳng định, câu hỏi hay câu kể. KHÔNG đảo chủ ngữ/tân ngữ, KHÔNG thêm chi tiết không có trong src (vd "từ đời nào", "con bé"), KHÔNG bỏ ý.
 - Giữ người nói của draft. Xưng hô giữa cùng hai người phải thống nhất cả trang: nếu draft lẫn lộn (lúc cậu/tớ lúc anh/em) thì chọn một cặp hợp nhất và sửa mọi câu theo cặp đó.
-- BẢNG XƯNG HÔ (nếu được đưa) là quyết định của các trang trước: cặp nào đã có trong bảng thì BẮT BUỘC dùng đúng cặp đó, kể cả khi draft dùng cặp khác. Không đổi cặp đã có.
-- Trả về "glossary": bảng xưng hô sau trang này = bảng cũ + cặp mới gặp ở trang này, mỗi dòng một cặp, ghi CẢ HAI CHIỀU dạng "A ↔ B: A xưng X gọi B là Y; B xưng Y gọi A là X" (dùng tên hoặc mô tả ngắn: "Iori", "bạn gái của Iori", "người dẫn chương trình"). Sửa mọi câu của cả A và B theo đúng chiều của người nói. Không có gì mới thì trả lại bảng cũ.
+- BẢNG XƯNG HÔ (nếu được đưa) là quyết định của các trang trước: cặp nào đã có trong bảng thì BẮT BUỘC dùng đúng cặp đó, kể cả khi draft dùng cặp khác. Ngoại lệ duy nhất: cặp trong bảng rõ ràng trái với tuổi/quan hệ ở trang này (vd ghi "cậu/tớ" giữa người lớn và học sinh) - khi đó sửa cặp đó trong "glossary" cho đúng và dùng cặp đã sửa.
+- Mọi câu của cùng một người nói với cùng một người nghe trên trang phải dùng CÙNG một cặp xưng hô; rà lại cả trang trước khi trả về.
+- Trả về "glossary": bảng xưng hô sau trang này = bảng cũ + cặp mới gặp ở trang này, mỗi dòng một cặp, ghi CẢ HAI CHIỀU dạng "A ↔ B (quan hệ): A xưng X gọi B là Y; B xưng Y gọi A là X" (vd "Ken ↔ Mio (anh trai ↔ em gái): Ken xưng anh gọi Mio là em; Mio xưng em gọi Ken là anh hai") (dùng tên hoặc mô tả ngắn: "Iori", "bạn gái của Iori", "người dẫn chương trình"). Sửa mọi câu của cả A và B theo đúng chiều của người nói. Không có gì mới thì trả lại bảng cũ.
 - DỊCH TỰ NHIÊN, KHÔNG WORD-BY-WORD (quan trọng):
   + Chào: "よろしくお願いします" (bạn bè) → "Rất mong cậu giúp đỡ nhé!"; (công sở) → "Rất mong anh/chị chỉ giáo."; "お疲れ様" → "Vất vả rồi!"; "ただいま" → "Tôi về đây!"; "いってらっしゃい" → "Đi cẩn thận nhé!".
   + Cảm thán: "えっ" → "Hả?"; "うそ！" → "Xạo!"; "なるほど" → "Ra thế…"; "やばい" → "Chết tiệt!" / "Khủng khiếp!".
@@ -100,13 +121,14 @@ Ví dụ cứng → tự nhiên:
 "Có vẻ như anh ấy đã quên mất cuộc hẹn của chúng tôi." (nghĩ thầm) → "Chắc lại quên béng vụ hẹn rồi..."
 "Yoroshiku onegaishimasu" (hai bạn mới quen) → "Từ giờ mong cậu chỉ bảo nhiều nhé!"
 Trả về DUY NHẤT một khối JSON, không thêm chữ nào trước/sau:
-{"lines": ["câu đã viết lại 1", "câu đã viết lại 2"], "glossary": "bảng xưng hô sau trang này"}
-"lines" phải đủ đúng số mục nhận được, cùng thứ tự. Không có cặp xưng hô mới thì "glossary" = bảng cũ nguyên văn.`;
+{"lines": ["câu đã viết lại 1", "câu đã viết lại 2"], "glossary": "bảng xưng hô sau trang này", "names": ["田中 → Tanaka"]}
+"lines" phải đủ đúng số mục nhận được, cùng thứ tự. Không có cặp xưng hô mới thì "glossary" = bảng cũ nguyên văn.
+"names": CHỈ tên riêng thật (người, địa danh, môn phái, chiêu thức, tổ chức) xuất hiện trong src của trang này, dạng "tên gốc → cách viết trong bản dịch". Không đưa từ thường, câu cảm thán hay chữ viết hoa thường. Không có thì [].`;
 const POLISH_JOB = {
-  system: POLISH_SYSTEM, name: 'lines',
+  system: POLISH_SYSTEM, name: 'lines', maxTokens: 2500,
   schema: {
-    type: 'object', additionalProperties: false, required: ['lines', 'glossary'],
-    properties: { lines: { type: 'array', items: { type: 'string' } }, glossary: { type: 'string' } },
+    type: 'object', additionalProperties: false, required: ['lines', 'glossary', 'names'],
+    properties: { lines: { type: 'array', items: { type: 'string' } }, glossary: { type: 'string' }, names: { type: 'array', items: { type: 'string' } } },
   },
 };
 
@@ -117,7 +139,7 @@ async function polish(provider, key, model, bubbles, context, glossary = '') {
   try {
     const P = typeof provider === 'string' ? PROVIDERS[provider] : provider; // id (default URL) or providerFor()
     const prompt = (glossary ? `BẢNG XƯNG HÔ:\n${glossary}\n\n` : '') + (context ? `Lời thoại trang trước:\n${context}\n\n` : '')
-      + 'Các bong bóng:\n' + JSON.stringify(bubbles.map((b) => ({ src: b.src || '', draft: b.text })));
+      + 'Các bong bóng:\n' + JSON.stringify(bubbles.map((b) => ({ src: b.src || '', ...(b.who && { who: b.who }), draft: b.text })));
     const raw = await P.translate(key, model, null, prompt, undefined, POLISH_JOB);
     let out = JSON.parse(raw.replace(/^\s*```(?:json)?|```\s*$/g, ''));
     // some models answer with the bare lines array despite the schema (seen live: glm-4.6v returned
@@ -125,9 +147,10 @@ async function polish(provider, key, model, bubbles, context, glossary = '') {
     // just stays the old one, which is the correct fallback anyway.
     if (Array.isArray(out)) out = { lines: out, glossary: '' };
     const g = typeof out.glossary === 'string' && out.glossary.trim() ? out.glossary.trim().slice(0, 1500) : glossary; // cap: it rides in every later prompt
+    const names = Array.isArray(out.names) ? out.names.filter((n) => typeof n === 'string' && n.trim()).map((n) => n.trim().slice(0, 60)) : [];
     const { lines } = out;
-    if (!Array.isArray(lines) || lines.length !== bubbles.length || lines.some((l) => typeof l !== 'string' || !l.trim())) return { bubbles, glossary: g };
-    return { bubbles: bubbles.map((b, i) => ({ ...b, text: lines[i].trim() })), glossary: g };
+    if (!Array.isArray(lines) || lines.length !== bubbles.length || lines.some((l) => typeof l !== 'string' || !l.trim())) return { bubbles, glossary: g, names };
+    return { bubbles: bubbles.map((b, i) => ({ ...b, text: lines[i].trim() })), glossary: g, names };
   } catch {
     return { bubbles, glossary };
   }
@@ -168,12 +191,15 @@ async function api(url, init) {
     try {
       res = await fetch(url, { ...init, signal: AbortSignal.timeout(secs * 1000) });
     } catch (e) {
-      if (e.name === 'TimeoutError') throw new Error(`Model không trả lời sau ${secs} giây - chọn model nhanh hơn trong popup.`);
+      if (e.name === 'TimeoutError') throw new Error(`Model không trả lời sau ${secs} giây - chọn model nhanh hơn trong Cài đặt.`);
       throw new Error('Không kết nối được tới API: ' + e.message);
     }
     const body = await res.json().catch(() => ({}));
     if (res.ok) return body;
-    const errMsg = body?.error?.message || body?.msg || '';
+    // OpenRouter wraps the upstream's real reason in metadata.raw ("Provider returned error" alone says nothing)
+    let raw = body?.error?.metadata?.raw;
+    try { raw = JSON.parse(raw)?.error?.message || raw; } catch { /* plain text */ }
+    const errMsg = [body?.error?.message || body?.msg || '', typeof raw === 'string' ? raw.slice(0, 300) : ''].filter(Boolean).join(': ');
     const wait = resetSeconds(errMsg);
     if (wait && tries < resets) { await new Promise((r) => setTimeout(r, (wait + 2) * 1000)); continue; }
     throw new Error(errMsg || 'HTTP ' + res.status);
@@ -309,12 +335,12 @@ function parseBubbles(text) {
   // A box over 25% of the page is never one speech bubble (largest on the test page is ~3.4%).
   const c = (v) => Math.min(1000, Math.max(0, v * x10)) / 10;
   const STYLES = new Set(['big', 'small', 'shout', 'whisper', 'narration', 'vertical']);
-  const parsed = bubbles.flatMap(({ box_2d: b, text: t, src, sfx, style }) => {
+  const parsed = bubbles.flatMap(({ box_2d: b, text: t, src, who, sfx, style }) => {
     if (!t?.trim() || !Array.isArray(b) || b.length !== 4 || !b.every((v) => Number.isFinite(v) && v >= -10 && v <= 1010)) return [];
     const [y0, x0, y1, x1] = [c(Math.min(b[0], b[2])), c(Math.min(b[1], b[3])), c(Math.max(b[0], b[2])), c(Math.max(b[1], b[3]))];
     const w = x1 - x0, h = y1 - y0;
     const st = STYLES.has(style) ? style : '';
-    return w > 0 && h > 0 && w * h <= 2500 ? [{ x: x0, y: y0, w, h, text: t.trim(), ...(src && { src }), ...(sfx && { sfx: true }), ...(st && { style: st }) }] : [];
+    return w > 0 && h > 0 && w * h <= 2500 ? [{ x: x0, y: y0, w, h, text: t.trim(), ...(src && { src }), ...(who && { who }), ...(sfx && { sfx: true }), ...(st && { style: st }) }] : [];
   });
   return mergeBubbles(parsed);
 }
@@ -335,6 +361,9 @@ async function probe({ provider, key, model, base }) {
 // extras differ. rank(m): lower sorts first (e.g. free models before paid); ties go newest first.
 // Every provider reads its endpoint from this.base so the user can point it elsewhere (providerFor).
 const bearer = (key) => (key ? { authorization: `Bearer ${key}` } : {}); // local servers (Ollama…) need no key
+// text-only jobs answer short: asking for less output keeps a low-balance key working (OpenRouter
+// refuses a call whose max_tokens it can't reserve: "can only afford 4063")
+const cap = (ex, maxTokens) => (maxTokens && ex.max_tokens > maxTokens ? { ...ex, max_tokens: maxTokens } : ex);
 const openaiCompat = (base, keep, extra = () => ({}), rank = () => 0) => ({
   base,
   listHeaders: bearer,
@@ -347,10 +376,10 @@ const openaiCompat = (base, keep, extra = () => ({}), rank = () => 0) => ({
       model,
       messages: [
         { role: 'system', content: job.system },
-        { role: 'user', content: [...(img ? [{ type: 'image_url', image_url: { url: `data:${img.mime};base64,${img.data}` } }] : []), { type: 'text', text: prompt }] },
+        { role: 'user', content: [...(img ? [{ type: 'image_url', image_url: { url: `data:${img.mime};base64,${img.data}`, detail: 'high' } }] : []), { type: 'text', text: prompt }] },
       ],
       response_format: { type: 'json_schema', json_schema: { name: job.name, strict: true, schema: job.schema } },
-      ...extra(model),
+      ...cap(extra(model), job.maxTokens),
     }, timeoutS));
     if (body.choices?.[0]?.finish_reason === 'length') throw new Error('Model hết giới hạn token trước khi dịch xong trang này.');
     const msg = body.choices?.[0]?.message;
@@ -401,8 +430,9 @@ const PROVIDERS = {
       return models
         .filter((m) => m.supportedGenerationMethods?.includes('generateContent'))
         .map((m) => m.name.replace('models/', ''))
-        .filter((id) => /^gemini-/.test(id))
-        .sort((a, b) => geminiVer(b) - geminiVer(a) || a.localeCompare(b));
+        .filter((id) => /^gemini-/.test(id) && !/tts|embedding|audio|live|image-generation|imagen|veo|aqa/.test(id)) // no image input: probing them only wastes the search
+        // flash-lite first: on free keys it's the one that answers (newer pro/flash hit "quota" or 30s timeouts)
+        .sort((a, b) => /flash-lite/.test(b) - /flash-lite/.test(a) || geminiVer(b) - geminiVer(a) || a.localeCompare(b));
     },
     async translate(key, model, img, prompt, timeoutS, job = PAGE_JOB) {
       const body = await api(`${this.base}/models/${model}:generateContent`, json({ 'x-goog-api-key': key }, {
@@ -473,7 +503,7 @@ function providerFor(id, base) {
 // Cache by image content + model: MangaDex recreates <img> tags for pages you go back to, and F5 reloads
 // them, so without this the same page is paid for again. Entries are ~1-2 KB; keep the newest CACHE_MAX.
 // Bump CACHE_V when the prompt changes, so results from the old prompt don't shadow the new ones.
-const CACHE_MAX = 500, CACHE_V = 4;
+const CACHE_MAX = 500, CACHE_V = 9;
 async function cacheKey(model, data) {
   const h = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(data)));
   return 'c:' + model + ':v' + CACHE_V + ':' + [...h.slice(0, 16)].map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -507,20 +537,19 @@ async function saveMem(site, mem) {
   } });
 }
 // Gộp bài học của trang này vào memory; trả về bản mới để trang sau dùng ngay.
-async function learnFromPage(site, mem, glossary, bubbles) {
+async function learnFromPage(site, mem, glossary, found) {
   if (!site) return mem;
   const next = { ...mem };
   // glossary: giữ dòng MỚI NHẤT cho mỗi cặp (khóa = đầu dòng "A ↔ B")
   const rows = String(glossary || '').split('\n').map((l) => l.trim()).filter(Boolean);
   const byHead = new Map();
-  for (const r of rows) byHead.set(r.split(':')[0].trim(), r);
+  for (const r of rows) byHead.set(r.split(/[:(]/)[0].trim(), r); // "A ↔ B (quan hệ): …" keyed by the pair only
   next.glossary = [...byHead.values()].join('\n').slice(0, MEM_MAX);
-  // names: mót tên riêng từ src (chữ CJK dài, chữ Latin viết hoa) - model đã giữ nguyên chúng,
-  // liệt kê lại cho trang sau thấy "tên này đã biết, đừng dịch"
+  // names: the polish pass lists real proper names ("田中 → Tanaka"). A regex over src used to do
+  // this and stored every capitalised word: an all-caps Spanish/English scan put "BUENO", "AHORA"…
+  // into "TÊN RIÊNG KHÔNG DỊCH", telling the next page to leave plain words untranslated.
   const names = new Set(mem.names || []);
-  for (const b of bubbles || []) {
-    for (const m of String(b.src || '').matchAll(/([\u4e00-\u9fff\u3040-\u30ff]{2,}|[A-Z][a-zA-Z]{2,})/g)) names.add(m[1]);
-  }
+  for (const n of found || []) names.add(n);
   next.names = [...names].slice(0, 60);
   await saveMem(site, next);
   return next;
@@ -528,7 +557,7 @@ async function learnFromPage(site, mem, glossary, bubbles) {
 function memBlock(mem) {
   const parts = [];
   if (mem.glossary) parts.push('BẢNG XƯNG HÔ:\n' + mem.glossary);
-  if (mem.names?.length) parts.push('TÊN RIÊNG KHÔNG DỊCH: ' + mem.names.join(', '));
+  if (mem.names?.length) parts.push('TÊN RIÊNG (giữ đúng cách viết này): ' + mem.names.join(', '));
   if (mem.notes?.length) parts.push('GHI CHÚ VĂN PHONG:\n' + mem.notes.join('\n'));
   return parts.join('\n\n');
 }
@@ -543,13 +572,13 @@ let Q_RETRY_MS = 5000; // per-try backoff; the unit test shortens it
 const pending = [], running = new Set(), waiters = new Map(); // waiters: key -> Set of {resolve, onDraft}
 let wakeTimer = null;
 
-async function enqueue(key, job, urgent, resolve, onDraft) {
+async function enqueue(key, job, urgent, resolve, onDraft, tag) {
   // a twin request may have finished while we were getting here: its result is already in the cache
   const hit = (await chrome.storage.local.get(key))[key];
   if (hit) { resolve({ bubbles: hit.bubbles, glossary: job.glossary }); return; }
   let w = waiters.get(key);
   if (!w) waiters.set(key, (w = new Set()));
-  w.add({ resolve, onDraft });
+  w.add({ resolve, onDraft, tag });
   if (running.has(key)) return; // job in flight: our waiter resolves when it does
   const q = pending.find((p) => p.key === key);
   if (q) { // already waiting: just bump priority if asked
@@ -559,6 +588,21 @@ async function enqueue(key, job, urgent, resolve, onDraft) {
   }
   urgent ? pending.unshift({ key, job, urgent }) : pending.push({ key, job });
   pump();
+}
+
+// The page cancelled (Huỷ / Dừng dịch): resolve its waiters now and drop a queued job nobody waits for
+// any more. A job already running can't be pulled back from the API; it finishes into the cache.
+function cancel(tag) {
+  if (!tag) return 0;
+  let n = 0;
+  for (const [key, set] of waiters) {
+    for (const w of [...set]) if (w.tag === tag) { set.delete(w); w.resolve({ error: 'Đã huỷ' }); n++; }
+    if (set.size) continue;
+    waiters.delete(key);
+    const i = pending.findIndex((p) => p.key === key);
+    if (i >= 0) pending.splice(i, 1);
+  }
+  return n;
 }
 
 function pump() {
@@ -609,17 +653,18 @@ async function run(item) {
 }
 
 // translate(): resolve provider + cache check, then hand the work to the queue
-async function translate({ data, mime, url, context, glossary = '', site, urgent, onDraft }) {
+async function translate({ data, mime, url, context, glossary = '', site, urgent, onDraft, part = false, tag, draftPort }) {
   if (!data) ({ data, mime } = await fetchImage(url));
-  const { provider = 'anthropic', keys = {}, models = {}, bases = {}, polish: doPolish = true, sfx = true }
+  const { provider = 'anthropic', keys = {}, models = {}, bases = {}, polish: polishOn = true, sfx = true }
     = await chrome.storage.local.get(['provider', 'keys', 'models', 'bases', 'polish', 'sfx']);
+  const doPolish = polishOn && !part; // a recovery crop is one or two lines: one call, no polish pass
   if ((!keys[provider] && provider !== 'custom') || !models[provider]) throw new Error('Chưa nhập API key / chọn model (bấm icon extension).');
   // sfx rides in the cache key: the same page under the other setting must not shadow it
-  const key = await cacheKey(models[provider] + (doPolish ? '+p' : '') + (sfx ? '' : '-sfx'), data);
+  const key = await cacheKey(models[provider] + (doPolish ? '+p' : '') + (sfx ? '' : '-sfx') + (part ? '+part' : ''), data);
   const hit = (await chrome.storage.local.get(key))[key];
   if (hit) return { bubbles: hit.bubbles, glossary }; // same page already translated by this model: no API call
-  const job = { key, data, mime, context, glossary, site, provider, base: bases[provider], model: models[provider], apiKey: keys[provider], doPolish, sfx };
-  return new Promise((resolve) => enqueue(key, job, urgent, resolve, onDraft));
+  const job = { key, data, mime, context, glossary, site, provider, base: bases[provider], model: models[provider], apiKey: keys[provider], doPolish, sfx, part };
+  return new Promise((resolve) => enqueue(key, job, urgent, resolve, onDraft, tag || draftPort));
 }
 
 // Returns { bubbles, glossary }. glossary (pronoun pairs for this tab) only changes when polish runs.
@@ -627,28 +672,48 @@ async function translate({ data, mime, url, context, glossary = '', site, urgent
 // sfx=false drops the model's SFX-tagged bubbles before polish and before the draft is pushed,
 // so both paints and the cache agree on what the user asked to see.
 async function translateJob(job, onDraft) {
-  const { key, data, mime, context, glossary = '', site, provider, base, model, apiKey, doPolish, sfx = true } = job;
+  const { key, data, mime, context, glossary = '', site, provider, base, model, apiKey, doPolish, sfx = true, part = false } = job;
   const P = providerFor(provider, base);
   // memory của site: xưng hô/tên riêng/văn phong học từ các trang & chapter trước
   const mem = await loadMem(site).catch(() => ({ glossary: '', names: [], notes: [] }));
   const head = memBlock(mem);
-  const prompt = (head ? head + '\n\n' : '') + (context ? `Lời thoại trang trước (giữ xưng hô nhất quán):\n${context}` : 'Đây là trang đầu tiên.');
+  const where = part
+    ? 'ẢNH NÀY LÀ ẢNH CẮT một vùng nhỏ của trang truyện, chứa khối chữ mà lượt đọc trước bỏ sót. Dịch MỌI chữ trong ảnh cắt; box_2d tính theo khung ảnh cắt này. Không có chữ thì trả {"bubbles": []}.\n'
+      + 'Lời thoại đã dịch của trang này (giữ đúng xưng hô):\n' + (context || '(chưa có)')
+    : context ? `Lời thoại trang trước (giữ xưng hô nhất quán):\n${context}` : 'Đây là trang đầu tiên.';
+  const prompt = (head ? head + '\n\n' : '') + where;
   const call = () => P.translate(apiKey, model, { data, mime }, prompt, undefined, pageJob(doPolish));
   let bubbles = parseBubbles(await call());
   // a page that clearly has text but came back with zero boxes is a model flake (seen with gpt-5.6-sol,
-  // 1 run in 7): one retry, not a loop - a genuinely textless page pays a second call instead of lying
-  if (!bubbles.length) bubbles = parseBubbles(await call());
+  // 1 run in 7): one retry, not a loop - a genuinely textless page pays a second call instead of lying.
+  // A recovery crop may hold no text at all (the pixel finder's false alarm): no retry there.
+  if (!bubbles.length && !part) bubbles = parseBubbles(await call());
+  // Vietnamese almost always carries diacritics; a multi-word "translation" without any is the source text
+  // copied back (live MangaDex run: a recovery crop answered in Indonesian). Ask once more, then drop.
+  const VI = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i;
+  const untranslated = (b) => !b.sfx && b.text.split(/\s+/).length >= 3 && !VI.test(b.text);
+  if (bubbles.some(untranslated)) {
+    const warn = 'LƯU Ý: lần trước trường "text" bị trả NGUYÊN VĂN ngôn ngữ gốc. "text" PHẢI là bản dịch TIẾNG VIỆT.\n\n';
+    const again = await P.translate(apiKey, model, { data, mime }, warn + prompt, undefined, pageJob(doPolish)).then(parseBubbles, () => []);
+    if (again.length && !again.some(untranslated)) bubbles = again;
+    else bubbles = bubbles.filter((b) => !untranslated(b));
+  }
   if (!sfx) bubbles = bubbles.filter((b) => !b.sfx); // user turned SFX off: drop tagged bubbles
   onDraft?.(bubbles);
   let g = glossary;
   if (doPolish) {
     const before = glossary;
-    ({ bubbles, glossary: g } = await polish(P, apiKey, model, bubbles, context, head || glossary));
+    let names = [];
+    ({ bubbles, glossary: g, names = [] } = await polish(P, apiKey, model, bubbles, context, head || glossary));
     // This page just added pronoun pairs: polish it once more under them, so it follows its own decision.
     // (gemini-3.1-flash-lite, real page, 3 runs: 1-2 mixed lines left after one pass, 0 after this.)
-    if (g !== before) ({ bubbles, glossary: g } = await polish(P, apiKey, model, bubbles, context, g));
+    if (g !== before) {
+      let more = [];
+      ({ bubbles, glossary: g, names: more = [] } = await polish(P, apiKey, model, bubbles, context, g));
+      names = names.concat(more);
+    }
     // học hỏi tích lũy: gộp bảng xưng hô + tên riêng của trang này vào memory của site
-    await learnFromPage(site, mem, g, bubbles).catch(() => {});
+    await learnFromPage(site, mem, g, names).catch(() => {});
   }
   await cachePut(key, bubbles);
   return { bubbles, glossary: g };
@@ -658,7 +723,7 @@ async function translateJob(job, onDraft) {
 // reads its files fresh from disk, but this service worker keeps running the old code until the extension
 // is reloaded; a real report ("Cannot read properties of undefined (reading 'translate')") was a new popup
 // talking to an old worker that had no 'custom' provider.
-const API = 5;
+const API = 6;
 
 // Draft-first streaming: content.js opens a port named "md-draft-<imgsrc-hash>" and names it in the
 // translate message; while that page's job runs we hold the port and push the read pass's boxes
@@ -683,8 +748,32 @@ chrome.runtime.onMessage.addListener((msg, _sender, send) => {
     : msg.type === 'defaults' ? Promise.resolve({ bases: Object.fromEntries(Object.entries(PROVIDERS).map(([k, p]) => [k, p.base])) })
     : msg.type === 'mem' ? loadMem(msg.site).then((m) => ({ mem: m })) // popup: xem AI đã học gì về site này
     : msg.type === 'mem-reset' ? saveMem(msg.site, { glossary: '', names: [], notes: [] }).then(() => ({ ok: true }))
+    : msg.type === 'mem-save' ? loadMem(msg.site).then((m) => saveMem(msg.site, { ...m, ...msg.mem })).then(() => ({ ok: true })) // settings page: user edits
+    : msg.type === 'mem-list' ? chrome.storage.local.get(null).then((all) => ({ sites: Object.keys(all).filter((k) => k.startsWith('mem:')).map((k) => k.slice(4)) }))
+    : msg.type === 'start' ? inject(msg.tabId).then(() => ({ ok: true }))
+    : msg.type === 'cancel' ? Promise.resolve({ cancelled: cancel(msg.tag) })
+    : msg.type === 'fetch-image' ? fetchImage(msg.url) // page canvas tainted by a cross-origin image: hand it clean bytes
     : null;
   if (!job) return;
   job.then(send, (e) => send({ error: String(e.message || e) }));
   return true; // keep channel open for async reply
+});
+
+// ---------- starting a tab: popup button, keyboard shortcut, or a site the user set to auto-translate ----------
+const hostOf = (url) => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return ''; } };
+async function inject(tabId, quiet = false) {
+  if (quiet) await chrome.scripting.executeScript({ target: { tabId }, func: () => { window.__mdQuiet = true; } });
+  await chrome.scripting.executeScript({ target: { tabId }, files: ['fit.js', 'text.js', 'content.js'] });
+}
+// Auto sites: every page load on a host the user switched on starts translating by itself, so a reader
+// never has to open the popup per chapter. quiet: no "no manga page here" notice on the site's other pages.
+chrome.tabs?.onUpdated.addListener(async (tabId, info, tab) => {
+  if (info.status !== 'complete' || !/^https?:/.test(tab.url || '')) return;
+  const { autoSites = [] } = await chrome.storage.local.get('autoSites');
+  if (autoSites.includes(hostOf(tab.url))) inject(tabId, true).catch(() => {});
+});
+chrome.commands?.onCommand.addListener(async (cmd) => {
+  if (cmd !== 'translate-tab') return;
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tab?.id) inject(tab.id).catch(() => {});
 });

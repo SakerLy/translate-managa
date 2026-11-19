@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="vi">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cài đặt · Manga Dịch</title>
+<link rel="stylesheet" href="ui.css">
+<style>
+  .top { position: sticky; top: 0; z-index: 2; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); }
+  .top .in { max-width: 820px; margin: 0 auto; padding: 14px 20px; display: flex; align-items: center; gap: 12px; }
+  .top h1 { font-size: 16px; }
+  .top nav { margin-left: auto; display: flex; gap: 4px; flex-wrap: wrap; }
+  .top nav a { padding: 5px 10px; border-radius: 8px; color: var(--muted); text-decoration: none; font-weight: 600; font-size: 12.5px; }
+  .top nav a:hover { background: var(--surface); color: var(--text); }
+  /* minmax(0,1fr): long one-line model errors must not widen the column past 820px (real report: page shifted) */
+  main { max-width: 820px; margin: 0 auto; padding: 20px 20px 60px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .card { padding: 20px; scroll-margin-top: 80px; min-width: 0; }
+  .card > header { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
+  .card > header h2 { font-size: 15px; }
+  .card > header p { margin: 2px 0 0; color: var(--muted); font-size: 12.5px; }
+  .num { flex: none; width: 26px; height: 26px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; font-weight: 800; font-size: 12px; }
+  .providers { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; margin-bottom: 16px; }
+  .prov { position: relative; display: block; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; cursor: pointer; background: var(--card); }
+  .prov:hover { border-color: var(--muted); }
+  .prov input { position: absolute; opacity: 0; }
+  .prov b { display: block; font-size: 13px; }
+  .prov span { color: var(--muted); font-size: 11.5px; }
+  .prov:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+  .prov:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 1px; }
+  .prov .tag { position: absolute; top: 8px; right: 8px; font-size: 10px; font-weight: 700; color: var(--ok); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 640px) { .grid2 { grid-template-columns: 1fr; } .top nav { display: none; } }
+  .field { margin-bottom: 14px; }
+  .status { margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: var(--surface); white-space: pre-wrap; word-break: break-word; min-height: 1.5em; }
+  .status.ok { background: var(--ok-soft); color: var(--ok); } .status.err { background: var(--err-soft); color: var(--err); }
+  .status:empty { display: none; }
+  .models { margin-top: 12px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; max-height: 300px; overflow-y: auto; }
+  .models > div { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-top: 1px solid var(--border); }
+  .models > div:first-child { border-top: 0; }
+  .models .name { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .models .name { flex: 0 1 auto; }
+  .models .res { flex: 1 1 0; min-width: 0; text-align: right; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .models .res.ok { color: var(--ok); } .models .res.err { color: var(--err); }
+  .models .cur { background: var(--accent-soft); }
+  .saved { font-size: 12px; color: var(--ok); opacity: 0; transition: opacity .2s; }
+  .saved.on { opacity: 1; }
+  .sites { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px 4px 10px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); font-size: 12.5px; }
+  .chip button { border: 0; background: none; color: var(--muted); padding: 0 4px; font-size: 14px; line-height: 1; }
+  kbd { font: 600 12px ui-monospace, Consolas, monospace; padding: 2px 6px; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 6px; background: var(--surface); }
+</style>
+
+<div class="top"><div class="in">
+  <div class="logo" aria-hidden="true">MD</div>
+  <div><h1>Manga Dịch</h1><span class="saved" id="saved" role="status">✓ Đã lưu</span></div>
+  <nav aria-label="Mục cài đặt"><a href="#ai">Kết nối AI</a><a href="#translate">Cách dịch</a><a href="#memory">Trí nhớ AI</a><a href="#keys">Phím tắt</a></nav>
+</div></div>
+
+<main>
+  <div class="banner" id="stale" role="alert" hidden>
+    <b>Extension vừa được cập nhật nhưng chưa tải lại.</b>
+    <button class="btn small primary" id="reload" type="button" style="margin-top:6px">Tải lại extension</button>
+  </div>
+
+  <section class="card" id="ai" aria-labelledby="h-ai">
+    <header><div class="num">1</div><div><h2 id="h-ai">Kết nối AI</h2><p>Mọi thay đổi được lưu ngay khi bạn gõ. Key chỉ nằm trên máy bạn.</p></div></header>
+
+    <div class="providers" role="radiogroup" aria-label="Nhà cung cấp AI" id="providers">
+      <label class="prov"><input type="radio" name="provider" value="gemini"><b>Google Gemini</b><span>Có gói miễn phí</span><i class="tag">FREE</i></label>
+      <label class="prov"><input type="radio" name="provider" value="openrouter"><b>OpenRouter</b><span>Nhiều model, có model free</span><i class="tag">FREE</i></label>
+      <label class="prov"><input type="radio" name="provider" value="groq"><b>Groq</b><span>Nhanh, có gói miễn phí</span><i class="tag">FREE</i></label>
+      <label class="prov"><input type="radio" name="provider" value="anthropic"><b>Anthropic Claude</b><span>Dịch văn phong tốt</span></label>
+      <label class="prov"><input type="radio" name="provider" value="openai"><b>OpenAI GPT</b><span>API chính hãng</span></label>
+      <label class="prov"><input type="radio" name="provider" value="custom"><b>Tùy chỉnh</b><span>Cổng trung gian, Ollama…</span></label>
+    </div>
+
+    <div class="grid2">
+      <div class="field">
+        <label class="lbl" for="key">API key <a id="getkey" href="#" target="_blank" rel="noopener">Lấy key ↗</a></label>
+        <div class="row">
+          <input class="grow" id="key" type="password" placeholder="Dán API key" autocomplete="off" spellcheck="false">
+          <button class="btn" id="eye" type="button" aria-label="Hiện key">Hiện</button>
+        </div>
+      </div>
+      <div class="field">
+        <label class="lbl" for="base">Base URL</label>
+        <input id="base" type="url" spellcheck="false" autocomplete="off">
+        <p class="hint" id="base-hint"></p>
+      </div>
+    </div>
+
+    <div class="field">
+      <label class="lbl" for="model">Model đang dùng</label>
+      <div class="row">
+        <input class="grow" id="model" list="model-list" placeholder="Bấm “Tìm model tốt nhất” hoặc gõ tên model" spellcheck="false" autocomplete="off">
+        <datalist id="model-list"></datalist>
+        <button class="btn" id="test" type="button">Kiểm tra</button>
+        <button class="btn primary" id="find" type="button">Tìm model tốt nhất</button>
+      </div>
+      <p class="hint">“Tìm model tốt nhất” gọi thử từng model bằng một ảnh mẫu và chọn model nhanh nhất mà vẫn đọc đúng chữ, đặt đúng ô.</p>
+    </div>
+    <div class="status" id="msg" role="status"></div>
+    <div class="models" id="models" hidden></div>
+  </section>
+
+  <section class="card" id="translate" aria-labelledby="h-tr">
+    <header><div class="num">2</div><div><h2 id="h-tr">Cách dịch</h2><p>Trang đang mở đổi theo ngay, không cần tải lại.</p></div></header>
+    <label class="switch"><input type="checkbox" id="polish"><span class="track" aria-hidden="true"></span>
+      <span class="txt">Trau chuốt văn phong &amp; xưng hô<small>Thêm 1 lượt gọi chỉ có chữ: viết lại cho tự nhiên, sửa xưng hô anh/em, ông/cháu… cho đúng quan hệ và nhất quán</small></span></label>
+    <label class="switch"><input type="checkbox" id="recover"><span class="track" aria-hidden="true"></span>
+      <span class="txt">Dịch bù chữ bị sót<small>Tự dò bong bóng còn chữ gốc mà chưa có bản dịch, cắt riêng vùng đó gửi AI dịch lại (tối đa 4 vùng/trang)</small></span></label>
+    <label class="switch"><input type="checkbox" id="sfx"><span class="track" aria-hidden="true"></span>
+      <span class="txt">Dịch cả SFX (từ tượng thanh)<small>Tắt để chỉ giữ lời thoại</small></span></label>
+    <label class="switch"><input type="checkbox" id="textOnly"><span class="track" aria-hidden="true"></span>
+      <span class="txt">Bỏ qua trang không có chữ<small>Trang bìa, tranh minh họa: không tốn lượt gọi; có nút “Vẫn dịch” trên trang</small></span></label>
+
+    <div style="margin-top:14px">
+      <b>Site tự dịch</b>
+      <p class="hint">Mở chapter trên các site này là tự dịch, không cần bấm icon extension. Bật/tắt từng site trong popup.</p>
+      <div class="sites" id="sites"></div>
+    </div>
+  </section>
+
+  <section class="card" id="memory" aria-labelledby="h-mem">
+    <header><div class="num">3</div><div><h2 id="h-mem">Trí nhớ AI</h2><p>Bảng xưng hô và tên riêng AI tự học theo từng site, dùng cho mọi chapter sau. Sửa trực tiếp nếu AI ghi sai quan hệ.</p></div></header>
+    <div class="field">
+      <label class="lbl" for="mem-site">Site</label>
+      <select id="mem-site"></select>
+    </div>
+    <div class="field">
+      <label class="lbl" for="mem-glossary">Bảng xưng hô <span class="muted" style="font-weight:400;font-size:12px">mỗi dòng một cặp</span></label>
+      <textarea id="mem-glossary" rows="6" placeholder="Ken ↔ Mio (anh trai ↔ em gái): Ken xưng anh gọi Mio là em; Mio xưng em gọi Ken là anh hai"></textarea>
+    </div>
+    <div class="field">
+      <label class="lbl" for="mem-names">Tên riêng giữ nguyên <span class="muted" style="font-weight:400;font-size:12px">cách nhau bằng dấu phẩy</span></label>
+      <textarea id="mem-names" rows="2" style="min-height:52px"></textarea>
+    </div>
+    <div class="field">
+      <label class="lbl" for="mem-notes">Ghi chú văn phong cho AI <span class="muted" style="font-weight:400;font-size:12px">mỗi dòng một ghi chú</span></label>
+      <textarea id="mem-notes" rows="3" style="min-height:64px" placeholder="Manga học đường, giọng trẻ trung&#10;Nhân vật chính hay nói trống không"></textarea>
+    </div>
+    <button class="btn small" id="mem-reset" type="button">Xoá trí nhớ site này</button>
+  </section>
+
+  <section class="card" id="keys" aria-labelledby="h-keys">
+    <header><div class="num">4</div><div><h2 id="h-keys">Phím tắt</h2><p>Dịch tab đang mở mà không cần mở popup.</p></div></header>
+    <p style="margin:0"><kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>D</kbd> &nbsp;<button class="linkbtn" id="shortcuts" type="button">Đổi phím tắt ↗</button></p>
+  </section>
+</main>
+
+<script src="options.js"></script>
+</html>

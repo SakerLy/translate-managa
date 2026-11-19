@@ -1,12 +1,13 @@
 {
   "manifest_version": 3,
-  "name": "Dịch Truyện",
-  "version": "0.4",
-  "description": "Dịch trang truyện tranh sang tiếng Việt bằng AI - tự học tên riêng, xưng hô, văn phong theo từng site truyện.",
+  "name": "Manga Dịch",
+  "version": "0.5",
+  "description": "Dịch manga sang tiếng Việt ngay trên bong bóng thoại - từ bản gốc tiếng Nhật hay bản scan tiếng Anh, Tây Ban Nha, Indonesia… Tự học xưng hô, tên riêng theo từng site truyện.",
   "permissions": [
     "storage",
     "activeTab",
-    "scripting"
+    "scripting",
+    "tabs"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -16,6 +17,16 @@
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Dịch Truyện"
+    "default_title": "Manga Dịch"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "commands": {
+    "translate-tab": {
+      "suggested_key": { "default": "Alt+Shift+D" },
+      "description": "Dịch trang truyện đang mở"
+    }
   }
 }

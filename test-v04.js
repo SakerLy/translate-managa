@@ -97,18 +97,20 @@ const call = (msg) => new Promise((res) => listener(msg, null, res));
   // ---------- site memory: học qua translate, dùng lại ở trang sau ----------
   {
     store = { provider: 'openai', keys: { openai: 'k' }, models: { openai: 'gpt-m' }, polish: true, sfx: true };
-    let polishReply = { lines: ['Cậu đi đâu đấy?'], glossary: 'Iori ↔ bạn gái: Iori xưng tớ gọi cậu; bạn gái xưng cậu gọi Iori là tớ' };
+    let polishReply = { lines: ['Cậu đi đâu đấy?'], glossary: 'Iori ↔ bạn gái: Iori xưng tớ gọi cậu; bạn gái xưng cậu gọi Iori là tớ', names: ['Iori → Iori'] };
     ctx.fetch = async (url, init) => {
       const body = JSON.parse(init.body);
       const isPolish = !body.messages?.[1]?.content?.some?.((c) => c.type === 'image_url');
       if (isPolish) return { ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify(polishReply) } }] }) };
-      return { ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify({ bubbles: [{ box_2d: [100, 100, 300, 300], text: 'Cậu đi đâu đấy?', src: 'Iori どこへ行くの？' }] }) } }] }) };
+      return { ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify({ bubbles: [{ box_2d: [100, 100, 300, 300], text: 'Cậu đi đâu đấy?', src: 'IORI, BUENO, ¿ADÓNDE VAS? どこへ行くの？' }] }) } }] }) };
     };
     await call({ type: 'translate', data: 'M1', mime: 'image/jpeg', site: 'mangadex.org' });
     // memory đã lưu glossary + tên Iori
     const mem = (await call({ type: 'mem', site: 'mangadex.org' })).mem;
     assert.match(mem.glossary, /Iori ↔ bạn gái/, 'pronoun pair learned');
-    assert.ok(mem.names.includes('Iori'), 'name harvested from src: ' + mem.names);
+    assert.ok(mem.names.includes('Iori → Iori'), 'name learned from the polish pass: ' + mem.names);
+    // all-caps scanlation words and plain CJK words are NOT names (old regex stored BUENO, どこへ行くの…)
+    assert.ok(!mem.names.some((n) => /BUENO|ADÓNDE|どこ/.test(n)), 'plain words not stored as names: ' + mem.names);
     // site khác không thấy gì
     const other = (await call({ type: 'mem', site: 'other.site' })).mem;
     assert.equal(other.glossary, '', 'memory is per-site');
@@ -123,7 +125,7 @@ const call = (msg) => new Promise((res) => listener(msg, null, res));
     };
     await call({ type: 'translate', data: 'M2', mime: 'image/jpeg', site: 'mangadex.org' });
     assert.match(pagePrompt, /BẢNG XƯNG HÔ/, 'next page prompt carries the learned glossary');
-    assert.match(pagePrompt, /TÊN RIÊNG KHÔNG DỊCH: .*Iori/, 'next page prompt carries the learned names');
+    assert.match(pagePrompt, /TÊN RIÊNG \(giữ đúng cách viết này\): .*Iori/, 'next page prompt carries the learned names');
     // reset
     await call({ type: 'mem-reset', site: 'mangadex.org' });
     assert.equal((await call({ type: 'mem', site: 'mangadex.org' })).mem.glossary, '', 'reset clears it');

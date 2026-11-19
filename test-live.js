@@ -24,7 +24,7 @@ const ENV = { anthropic: 'ANTHROPIC_API_KEY', openai: 'OPENAI_API_KEY', gemini: 
 // "Tùy chỉnh" talks to whatever CUSTOM_BASE_URL points at (a gateway/proxy); everything else uses its default URL.
 const BASE = { custom: process.env.CUSTOM_BASE_URL || '' };
 let listener;
-const ctx = { fetch, btoa, AbortSignal, URL, chrome: { runtime: { onMessage: { addListener: (f) => (listener = f) } } } };
+const ctx = { fetch, btoa, AbortSignal, URL, crypto, TextEncoder, setTimeout, clearTimeout, chrome: { runtime: { onMessage: { addListener: (f) => (listener = f) }, onConnect: { addListener() {} } } } };
 vm.createContext(ctx);
 vm.runInContext(fs.readFileSync(process.env.BG || path.join(__dirname, 'manga-dich/background.js'), 'utf8'), ctx); // BG=other.js to A/B a variant
 ctx.testImage = async () => page; // Node has no OffscreenCanvas: probe with the real page instead

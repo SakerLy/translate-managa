@@ -2,13 +2,13 @@
 
 # Manga Dịch
 
-**Đọc manga, manhwa, manhua tiếng nước ngoài, hiện bản dịch tiếng Việt ngay trên bong bóng thoại.**
+**Đọc manga bằng tiếng Việt: bản dịch hiện ngay trên bong bóng thoại, từ bản gốc tiếng Nhật hay bản scan tiếng Anh, Tây Ban Nha, Indonesia…**
 
 [![Manifest V3](https://img.shields.io/badge/Chrome%20Extension-Manifest%20V3-4285F4?logo=googlechrome&logoColor=white)](manga-dich/manifest.json) [![Brave · Chrome · Edge](https://img.shields.io/badge/Brave%20%C2%B7%20Chrome%20%C2%B7%20Edge-supported-FB542B?logo=brave&logoColor=white)](#cai-dat) [![AI](https://img.shields.io/badge/AI-Gemini%20%C2%B7%20Claude%20%C2%B7%20GPT%20%C2%B7%20OpenRouter%20%C2%B7%20Groq-8E75B2)](#model) [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
 <img src="docs/demo.png" alt="Trước và sau khi bật Manga Dịch" width="820">
 
-[Tính năng](#tinh-nang) · [Cài đặt](#cai-dat) · [Sử dụng](#su-dung) · [Model](#model) · [Cách hoạt động](#cach-hoat-dong) · [Câu hỏi thường gặp](#faq) · [Phát triển](#phat-trien)
+[Tính năng](#tinh-nang) · [Cài đặt](#cai-dat) · [Sử dụng](#su-dung) · [Model](#model) · [Cách hoạt động](#cach-hoat-dong) · [Hỏi đáp](#faq) · [Phát triển](#phat-trien)
 
 </div>
 
@@ -18,23 +18,54 @@
 
 ## Tính năng
 
-<img src="docs/popup.png" alt="Popup của Manga Dịch" width="300" align="right">
+### Dịch đúng, đọc như truyện Việt
+- **Chỉ dành cho manga:** bản gốc tiếng Nhật, hoặc bản scan mà nhóm dịch nước ngoài đã chuyển sang tiếng Anh, Tây Ban Nha, Indonesia, Pháp… Bản scan vẫn được dịch theo văn phong manga, và kính ngữ bị nhóm dịch đổi (Miss Tanaka, señor) được trả lại thành Tanaka-san.
+- **Văn phong manga:**
+  - Giữ -san/-kun/-chan/-sama, senpai, sensei. Tên Nhật giữ romaji (Tanaka Yuki).
+  - Cách tự xưng gợi giọng nhân vật: 俺 → tao/tôi, 僕 → tớ/em, わし → lão, 拙者 → tại hạ.
+  - Theo thể loại: học đường/romcom (cậu/tớ, nhẹ nhàng), shounen (gọn, có lực), isekai/fantasy (mạo hiểm giả, ma vương, kỹ năng), seinen/kinh dị (câu chắc, giữ không khí), samurai/cổ trang (ta/ngươi, bệ hạ/thần).
 
-- **Dịch đúng chỗ.** Mỗi câu dịch nằm trên bong bóng của nó. Extension đọc điểm ảnh của trang để nới ô dịch phủ hết chữ gốc và lấy đúng màu nền của khung (khung tối thì chữ trắng). Ô trùng nhau được tự gộp (`mergeBubbles`), ô chồng nhau được tự tách (`separate`), nên các ô không bao giờ đè lên nhau. Bấm vào ô để xem lại chữ gốc.
-- **Chữ to nhỏ theo ngữ cảnh.** Model gắn nhãn từng khối chữ: chữ gào (`shout`, to đậm nghiêng), chữ thì thầm (`whisper`, mảnh nhỏ), chú thích (`small`), khung dẫn truyện (`narration`, nghiêng), chữ dọc (`vertical`); cỡ chữ được nới trần/đáy theo nhãn.
-- **Văn phong tự nhiên.** Phân biệt lời nói, lời nghĩ thầm, lời dẫn truyện. Giữ tên riêng và -san/-kun. Không dịch word-by-word: chào hỏi, cảm thán, câu đùa được viết lại bằng cách nói tự nhiên của tiếng Việt.
-- **Xưng hô nhất quán.** Bảng xưng hô (ví dụ "Iori ↔ bạn gái: cậu/tớ") được ghi lại ngay từ trang đầu và áp dụng cho mọi trang sau trong tab.
-- **AI học qua từng lần dịch.** Bảng xưng hô và tên riêng của từng site được lưu bền vững (`mem:<site>` trong chrome.storage): tắt trình duyệt, đổi chapter, xưng hô và tên riêng vẫn đúng như chapter trước. Xem/xoá được trong popup ("AI đã học về site này").
-- **Chịu lỗi quota của cổng trung gian.** Gặp "reset after 1m 50s" kiểu gatecheap, extension ngủ đúng thời gian đếm ngược rồi tự gọi lại trong cùng lượt - trang vẫn tự dịch xong thay vì đỏ lỗi Thử lại.
-- **Trau chuốt văn phong** *(tắt được)*. Lượt gọi thứ hai chỉ gửi chữ, viết lại cho trơn tru và đối chiếu chữ gốc để không sai nghĩa.
-- **Tự dịch khi bạn đọc.** Trang đang xem được dịch trước, rồi tới 2 trang kế tiếp. Lật hay cuộn tới đâu dịch tới đó, ở cả chế độ đọc từng trang, cuộn dọc và cuộn ngang.
-- **Nút Thử lại** ngay trên trang bị lỗi hoặc quá thời gian.
-- **Không trả tiền hai lần.** Trang đã dịch được lưu theo nội dung ảnh, nên quay lại hay tải lại trang (F5) không tốn thêm token.
-- **Tự chọn model.** Popup gọi thử thật từng model bằng một ảnh có 2 bong bóng ở vị trí biết trước, rồi chọn model nhanh nhất trong số đọc đúng chữ và đặt đúng ô.
-- **Dùng miễn phí được** với gói free của Gemini, Groq, hoặc các model miễn phí trên OpenRouter (được xếp lên đầu danh sách).
-- **Base URL tùy chỉnh** cho mọi nhà cung cấp (proxy, cổng trung gian), và nhà cung cấp **Tùy chỉnh** cho mọi server tương thích OpenAI: Ollama, LM Studio, vLLM… chạy ngay trên máy bạn.
+- **Xưng hô đúng quan hệ:** lượt đọc ảnh ghi lại *ai nói với ai* ("em gái → anh trai"), rồi lượt trau chuốt áp bảng quy tắc xưng hô Việt:
+  - gia đình: anh/em, chị/em, bố mẹ/con, ông bà/cháu
+  - họ hàng: bác, chú, cô, cậu, dì
+  - trường lớp: cậu/tớ, senpai, thầy cô
+  - người lớn với học sinh: cô/chú - cháu (không bao giờ cậu/tớ)
+  - công sở, người lạ, kẻ thù, samurai/fantasy
 
-<br clear="right">
+  Ví dụ đo thật: お兄ちゃん、遅いよ！ → "Anh hai, chậm quá đi!"; ông nói với hai cháu → "Ồ, cả hai đứa đến rồi à."; nữ sinh với mẹ bạn (bản scan Tây Ban Nha) → "Cháu cảm ơn cô đã đưa Momiji về ạ."
+- **AI nhớ qua từng chapter:** bảng xưng hô (kèm quan hệ) và tên riêng được lưu theo từng site. Đổi chapter hay tắt trình duyệt vẫn đúng như trước. **Sửa tay được** trong trang cài đặt nếu AI ghi sai.
+- **Không dịch word-by-word:** câu chào, cảm thán, câu đùa, thành ngữ được viết lại theo cách nói tự nhiên của tiếng Việt.
+
+### Ô dịch khớp bong bóng, không sót chữ
+- **Bám theo điểm ảnh:**
+  - Ô dịch bắt đầu từ chính các nét chữ gốc, rồi nới ra hết lòng bong bóng, nên chữ Việt to dễ đọc và không tràn ra tranh.
+  - Lấy đúng màu nền của khung (khung tối thì chữ trắng).
+- **Tự sửa tọa độ sai của model:**
+  - Model trả tọa độ đảo trục (x↔y, hay gặp với GPT/Claude qua cổng trung gian) → tự phát hiện và lật lại.
+  - Bộ sửa đảo trục vẫn hoạt động ở cảnh tối nhiều lá, mưa, nét gạch: những nét có cỡ lộn xộn không bị tính là chữ.
+  - Ô chỉ phủ một phần khối chữ gốc → nới ra phủ trọn khối.
+  - Ô nằm trên tranh, không có chữ → dời về khối chữ thật gần nhất.
+  - Ô khổng lồ phủ nửa trang → bỏ.
+- **Cỡ chữ theo chữ gốc:**
+  - Chữ dịch lấy chiều cao chữ gốc của bong bóng làm chuẩn, giống cách người làm chữ truyện làm.
+  - Câu ngắn trong bong bóng rộng không bị phóng khổng lồ.
+  - Câu dài trong bong bóng hẹp thì ô tự nới ra thay vì thu chữ li ti.
+- **Dịch bù chữ bị sót:** tự dò các khối chữ còn nguyên chữ gốc mà chưa có bản dịch, cắt riêng vùng đó ở độ phân giải gốc rồi gửi AI dịch lại (tối đa 4 vùng/trang).
+- Ô trùng nhau được gộp, ô chồng nhau được tách. Bấm vào ô để xem lại chữ gốc.
+
+### Dễ dùng
+- **Tự dịch theo site:** bật một lần cho MangaDex (hay site bất kỳ), sau đó mở chapter nào là tự dịch, không cần bấm icon nữa.
+- **Phím tắt** <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd> để dịch tab đang mở.
+- **Huỷ bất cứ lúc nào:**
+  - mỗi trang đang dịch có nút **Huỷ** ngay trên trang
+  - popup có nút **Dừng dịch tab này** để dừng cả tab
+
+  Trang chưa gửi đi sẽ không tốn lượt gọi API.
+- **Trang cài đặt riêng, tự lưu khi gõ:** không còn cảnh bấm ra ngoài popup là mất key đang nhập dở.
+- **Tự chọn model:** gọi thử từng model bằng một ảnh mẫu, chọn model nhanh nhất trong số đọc đúng chữ và đặt đúng ô.
+- **Dịch trước trang kế tiếp:** trang đang xem được dịch trước, rồi tới 2 trang sau. Chạy được với kiểu đọc từng trang, cuộn dọc và cuộn ngang.
+- **Không trả tiền hai lần:** trang đã dịch được lưu theo nội dung ảnh, quay lại hay F5 không tốn token. Trang không có chữ (bìa, minh họa) được bỏ qua.
+- **Chịu lỗi cổng trung gian:** gặp "reset after 1m 50s" thì chờ đúng thời gian rồi tự gọi lại; lỗi hiện rõ nguyên nhân thật thay vì "Provider returned error".
 
 <a id="cai-dat"></a>
 
@@ -42,30 +73,38 @@
 
 > Extension chưa có trên Chrome Web Store, nên bạn cài bằng chế độ dành cho nhà phát triển.
 
-1. **Tải mã nguồn:** bấm **Code → Download ZIP** rồi giải nén, hoặc chạy `git clone https://github.com/SakerLy/translate-managa.git`.
-2. Mở trang quản lý extension:
-
-   | Trình duyệt | Địa chỉ |
-   |---|---|
-   | Brave | `brave://extensions` |
-   | Chrome | `chrome://extensions` |
-   | Edge | `edge://extensions` |
-
+1. **Tải mã nguồn:** bấm **Code → Download ZIP** rồi giải nén, hoặc `git clone https://github.com/SakerLy/translate-managa.git`.
+2. Mở trang quản lý extension: `brave://extensions` · `chrome://extensions` · `edge://extensions`.
 3. Bật **Developer mode**.
 4. Bấm **Load unpacked** và chọn thư mục **`manga-dich`** *(không phải thư mục gốc của repo)*.
+
+> [!TIP]
+> Sau khi cập nhật code, bấm ⟳ ở trang extensions rồi **tải lại trang truyện (F5)**. Nếu quên, popup sẽ nhắc và có sẵn nút tải lại.
 
 <a id="su-dung"></a>
 
 ## Sử dụng
 
-1. Bấm icon **Manga Dịch** trên thanh công cụ.
-2. Trong khối **Cài đặt**: chọn **nhà cung cấp AI**, dán **API key** (link **Lấy key** dẫn tới trang tạo key), rồi bấm **Lưu và tìm model**.
-   Popup gọi thử các model (mất khoảng 10 giây tới 2 phút), sau đó tự chọn model tốt nhất và chuyển nhãn sang **Sẵn sàng**. Bạn có thể chọn model khác trong ô **Model** hoặc tự gõ tên model; model đó cũng được gọi thử trước khi lưu.
-3. Mở chương truyện, chờ ảnh tải xong, rồi bấm **Bật dịch tự động cho tab này** (nút chỉ bật khi đã cài đặt xong).
-4. Đọc bình thường. Góc mỗi trang hiện `Đang dịch… 5s` trong lúc chờ. Trang nào lỗi sẽ có nút **Thử lại** ngay trên trang.
+1. **Kết nối AI (một lần):** bấm icon **Manga Dịch** → **Mở cài đặt** (hoặc nút ⚙). Trang cài đặt mở trong tab mới:
+   - chọn nhà cung cấp, dán **API key** (và **Base URL** nếu dùng cổng trung gian)
+   - bấm **Tìm model tốt nhất**
 
-> [!TIP]
-> Sau khi cập nhật extension (bấm ⟳ ở trang extensions), hãy **tải lại trang truyện (F5)** để trang dùng code mới.
+   Mọi ô được lưu ngay khi gõ.
+2. **Đọc truyện:** mở chapter rồi bấm **Dịch trang này**, hoặc nhấn <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd>.
+3. **Khỏi bấm lần sau:** bật **Tự dịch trên ‹site›** trong popup.
+
+Trong lúc chờ, góc trang hiện `Đang dịch… 5s` cùng nút **Huỷ**. Bản nháp hiện trước, bản trau chuốt thay vào sau. Trang lỗi có nút **Thử lại**, trang đã huỷ có nút **Dịch lại**.
+
+Muốn dừng cả tab: mở popup → **Dừng dịch tab này**. Các trang đã dịch vẫn giữ nguyên. Bấm **Dịch trang này** hoặc phím tắt để chạy tiếp.
+
+Trang đang gọi API dở thì vẫn chạy nốt ở nền. Kết quả được lưu vào bộ nhớ đệm, nên **Dịch lại** sau đó không tốn thêm token.
+
+| Công tắc | Tác dụng |
+|---|---|
+| Trau chuốt văn phong & xưng hô | Thêm 1 lượt gọi chỉ có chữ: câu tự nhiên, xưng hô đúng quan hệ và nhất quán. **Nên bật.** |
+| Dịch bù chữ bị sót | Dò và dịch lại bong bóng model bỏ sót. |
+| Dịch cả SFX | Tắt để chỉ giữ lời thoại; đổi ngay trên trang, không gọi lại. |
+| Bỏ qua trang không có chữ | Không tốn lượt gọi cho trang bìa/minh họa; có nút "Vẫn dịch". |
 
 <a id="model"></a>
 
@@ -73,51 +112,36 @@
 
 | Nhà cung cấp | Lấy key | Chi phí |
 |---|---|---|
-| **Google Gemini** *(khuyên dùng)* | [aistudio.google.com](https://aistudio.google.com) | Có **gói miễn phí**. Dòng `flash-lite` nhanh nhất trong các lần thử. |
-| **OpenRouter** | [openrouter.ai/keys](https://openrouter.ai/keys) | Một key dùng được hàng trăm model. Model miễn phí được xếp đầu danh sách, giới hạn 50 request/ngày (1.000/ngày nếu đã nạp tổng cộng từ 10 USD). |
-| **Groq** | [console.groq.com/keys](https://console.groq.com/keys) | Có gói miễn phí. Model đọc ảnh theo tài liệu của Groq: `qwen/qwen3.8-27b`. *Chưa được test với key thật.* |
-| **Anthropic** (Claude) | [console.anthropic.com](https://console.anthropic.com) | Trả phí |
-| **OpenAI** (GPT) | [platform.openai.com](https://platform.openai.com) | Trả phí |
-| **Tùy chỉnh** (tương thích OpenAI) | Tùy server | Server chạy trên máy (Ollama, LM Studio…) miễn phí và không cần key. Cần model đọc được ảnh và hỗ trợ JSON schema; bước gọi thử sẽ kiểm tra. |
+| **Google Gemini** *(khuyên dùng)* | [aistudio.google.com](https://aistudio.google.com/apikey) | Có **gói miễn phí**; dòng `flash-lite` nhanh nhất. |
+| **OpenRouter** | [openrouter.ai/keys](https://openrouter.ai/keys) | Một key dùng hàng trăm model; model miễn phí xếp đầu danh sách. |
+| **Groq** | [console.groq.com/keys](https://console.groq.com/keys) | Có gói miễn phí. *Chưa test với key thật.* |
+| **Anthropic** (Claude) | [console.anthropic.com](https://console.anthropic.com/settings/keys) | Trả phí |
+| **OpenAI** (GPT) | [platform.openai.com](https://platform.openai.com/api-keys) | Trả phí |
+| **Tùy chỉnh** | Cổng trung gian, Ollama, LM Studio… | Theo server. |
 
-### Base URL
+**Cổng trung gian bán API nhiều hãng** (vd `https://gatecheap.vn/v1`): chọn **Tùy chỉnh**, dán Base URL có `/v1` ở cuối và key của cổng. Cổng này nói theo chuẩn OpenAI cho mọi model, kể cả Claude và Gemini. Danh sách model được đọc nguyên văn, và bước gọi thử sẽ quyết định model nào dùng được.
 
-Mỗi nhà cung cấp có ô **Base URL**. Để trống thì dùng địa chỉ mặc định (hiện mờ trong ô); chỉ điền khi đi qua proxy hoặc cổng trung gian. Với **Tùy chỉnh**, Base URL là bắt buộc:
-
-| Server | Base URL |
+| Server chạy trên máy | Base URL |
 |---|---|
 | Ollama | `http://localhost:11434/v1` |
 | LM Studio | `http://localhost:1234/v1` |
-| Gemini (cổng tương thích OpenAI) | `https://generativelanguage.googleapis.com/v1beta/openai` |
-
-**Cổng trung gian bán API nhiều hãng** thường nói theo chuẩn OpenAI cho mọi model, kể cả Claude và Gemini, nên hãy chọn **Tùy chỉnh** thay vì Anthropic hay Gemini. Khi Base URL khác mặc định, danh sách model được đọc nguyên văn, không lọc, và bước gọi thử sẽ quyết định model nào dùng được. Nếu bạn quên `/v1` ở cuối, popup sẽ gợi ý thêm vào.
-
-Chỉ chấp nhận địa chỉ `http://` hoặc `https://`. API key được gửi tới đúng Base URL bạn nhập, nên chỉ dùng địa chỉ bạn tin tưởng. Cổng tương thích OpenAI của Gemini đã được test thật (lấy danh sách model, gọi thử đạt); Ollama và LM Studio chưa được test.
 
 <details>
-<summary><b>Kết quả đo thật của từng model</b></summary>
+<summary><b>Kết quả đo thật</b></summary>
 
 <br>
 
-Đo ngày 17/11/2026 trên **một** trang MangaDex có 14 bong bóng. Mỗi lần chạy model trả về hơi khác nhau, nên các con số chỉ để tham khảo.
+Trang test MangaDex có 14 bong bóng, đáp án vị trí đo tay. Mỗi lần chạy model trả về hơi khác nhau, nên con số chỉ để tham khảo.
 
-| Model | Miễn phí | Thời gian/trang | Bong bóng có ô dịch | Ô dịch đúng chỗ |
-|---|---|---|---|---|
-| `gemini-3.5-flash-lite` | Có | 3,5s | 100% | 100% |
-| `gemini-3.1-flash-lite` | Có | 3–6s | 79–100% (trung bình 93%) | 92–100% |
-| `particle-ai/particle-1:free` (OpenRouter) | Có | 25s | 100% | 100% |
-| `openai/gpt-6-luna` (OpenRouter) | | 25s | 100% | 100% |
-| `anthropic/claude-haiku-5.5` (OpenRouter) | | 22s | 93% | 100% |
-
-Model mạnh hơn thì bước trau chuốt văn phong cũng làm tốt hơn, nhưng chậm hơn.
-
-**Bản 0.2** - đo lại trên trang test tổng hợp 14 bong bóng (8 dạng: thoại, nghĩ thầm, nền tối, caption, chữ dọc, SFX, chữ nhỏ, 2 bong bóng sát nhau) qua 3 model thị giác, mỗi model chạy lặp 3–5 lần:
-
-| Model | Ngày 0.2: trúng/dđúng chỗ (ô thô) | Sau khi khớp ô theo điểm ảnh |
+| Model | Bong bóng trúng: ô của model → sau khi khớp theo điểm ảnh | Ô lấn ra tranh |
 |---|---|---|
-| `glm-4.5v` | 85–97% | **95–100%** |
-| `glm-4.6v` | 76–95% | **86–100%** |
-| `glm-4v` | 76–90% | **80–97%** |
+| `gemini-flash-lite-latest` | 12/14 → **14/14** | 4% |
+| `openai/gpt-6-luna` (OpenRouter) | 14/14 → **14/14** | 5% |
+| `meta/muse-ember` (OpenRouter) | 12/14 → **14/14** | 11% → 5% |
+| `anthropic/claude-haiku-5.5` (OpenRouter) | 13/14 → **14/14** | 6% → 1% |
+| `openrouter/free` (trả tọa độ đảo trục) | 8/14 → **12/14** | 34% → 6% |
+
+Cùng model GPT, gọi qua OpenRouter trúng 13–14/14, nhưng qua cổng trung gian chỉ trúng 4–7/14: cổng có thể gửi ảnh cho model ở độ phân giải thấp. Từ bản 0.5, extension luôn yêu cầu ảnh `detail: high`, và bước dịch bù sẽ bắt các bong bóng bị sót.
 
 </details>
 
@@ -126,14 +150,13 @@ Model mạnh hơn thì bước trau chuốt văn phong cũng làm tốt hơn, nh
 
 <br>
 
-Mỗi request chỉ gửi **ảnh trang truyện**, lời dặn (khoảng 290 token) và lời thoại trang trước. Extension không gửi HTML hay nội dung nào khác của trang web. Số đo với `gemini-3.1-flash-lite`:
+Mỗi request chỉ gửi **ảnh trang truyện**, lời dặn và lời thoại trang trước. Không gửi HTML hay nội dung nào khác của trang web.
 
-| Chế độ | Request/trang | Token/trang (khoảng) |
+| Chế độ | Request/trang | Token/trang (khoảng, Gemini flash-lite) |
 |---|---|---|
 | Tắt trau chuốt | 1 | 2.000 |
 | Bật trau chuốt *(mặc định)* | 2 (3 ở trang có cặp nhân vật mới) | 4.000 |
-
-Với hai model Gemini đã đo, token ảnh cố định ở 1.092 token/ảnh dù ảnh to hay nhỏ. Thu nhỏ ảnh đã được thử: không tiết kiệm token mà còn giảm độ chính xác. Vì vậy extension gửi ảnh ở kích thước gốc (cạnh dài tối đa 1.568px).
+| Dịch bù | +1 cho mỗi vùng sót (ảnh cắt nhỏ, không trau chuốt) | +~600 mỗi vùng |
 
 </details>
 
@@ -143,66 +166,64 @@ Với hai model Gemini đã đo, token ảnh cố định ở 1.092 token/ảnh 
 
 ```mermaid
 flowchart LR
-    A["Trang truyện<br/>đang đọc"] --> B{"Đã dịch<br/>ảnh này?"}
-    B -- "có" --> F["Lấy từ<br/>bộ nhớ đệm"]
-    B -- "chưa" --> C["Đọc ảnh<br/>vị trí bong bóng + bản dịch"]
-    C --> D["Trau chuốt<br/>(chỉ gửi chữ + bảng xưng hô)"]
-    D --> E["Lưu"]
-    E --> G["Khớp ô vào bong bóng<br/>theo điểm ảnh"]
+    A["Trang truyện"] --> B{"Đã dịch<br/>ảnh này?"}
+    B -- "có" --> F["Bộ nhớ đệm"]
+    B -- "chưa" --> C["Đọc ảnh: vị trí,<br/>chữ gốc, ai nói với ai"]
+    C --> D["Trau chuốt: văn phong,<br/>xưng hô, tên riêng"]
+    D --> E["Lưu + học vào<br/>trí nhớ của site"]
+    E --> G["Khớp ô theo điểm ảnh:<br/>sửa đảo trục, neo vào chữ,<br/>nới hết lòng bong bóng"]
     F --> G
-    G --> H["Vẽ bản dịch"]
+    G --> H{"Còn chữ gốc<br/>chưa dịch?"}
+    H -- "có" --> I["Cắt vùng đó,<br/>dịch bù"] --> J
+    H -- "không" --> J["Vẽ bản dịch"]
 ```
 
-- **Đọc ảnh:** model trả về từng vùng chữ với vị trí `box_2d = [ymin, xmin, ymax, xmax]` trên thang 0–1000. Đây là định dạng Gemini được huấn luyện để xuất, theo tài liệu của Google, và chính xác hơn rõ so với tọa độ phần trăm tự đặt.
-- **Trau chuốt** được tách thành bước riêng có chủ đích. Khi nhét quy tắc văn phong vào cùng request đọc ảnh, độ trúng bong bóng giảm từ 93% xuống 80% (đo 5 lần mỗi bản).
-- **Bảng xưng hô** do bước trau chuốt cập nhật và được gửi kèm mọi trang sau. Trang nào tạo ra cặp nhân vật mới thì được trau chuốt lại một lần theo bảng đó. Trên dữ liệu thật, cách này đưa số câu lẫn xưng hô trong trang đó từ 1–2 câu về 0 (3/3 lần chạy).
-- **Khớp ô** ([`fit.js`](manga-dich/fit.js)): tìm các mảng mực cỡ chữ quanh ô của model (viền bong bóng và nét vẽ là mảng lớn nên bị loại), nới ô cho phủ hết chúng, bỏ qua chữ của bong bóng bên cạnh, và lấy màu nền chiếm nhiều nhất trong ô. Đo trên 10 bộ kết quả thật: chữ gốc được che tăng trung bình khoảng 7 điểm phần trăm (từ 2 tới 11), phần lấn ra tranh tăng khoảng 1,5 điểm.
-- **Bộ nhớ đệm** lưu tối đa 500 trang trong `chrome.storage.local`, theo mã băm SHA-256 của ảnh, model và chế độ trau chuốt.
+- **Đọc ảnh:** model trả từng khối chữ với `box_2d = [ymin, xmin, ymax, xmax]` (thang 0–1000), bản dịch, chữ gốc và người nói → người nghe.
+- **Trau chuốt** là bước riêng, chỉ gửi chữ. Gộp quy tắc văn phong vào cùng request đọc ảnh làm độ trúng bong bóng giảm từ 93% xuống 80% (đo 5 lần mỗi bản).
+- **Khớp ô** ([`fit.js`](manga-dich/fit.js)) gồm các bước:
+  1. Tìm các mảng mực cỡ chữ quanh ô của model.
+  2. Lấy chúng làm lõi, rồi nới từng cạnh ra khi hàng/cột kế bên vẫn là nền bong bóng.
+  3. Ô không có chữ bên dưới thì đổi trục hoặc dời sang khối chữ gần nhất mà [`textBlocks`](manga-dich/fit.js) tìm được.
+- **Bộ nhớ đệm:** tối đa 500 trang trong `chrome.storage.local`, khóa theo SHA-256 của ảnh, model và chế độ dịch.
 
 ## Quyền riêng tư
 
-- API key chỉ lưu trên máy bạn (`chrome.storage.local`) và chỉ được gửi tới nhà cung cấp bạn chọn (hoặc Base URL bạn nhập).
-- Ảnh trang truyện được gửi tới nhà cung cấp AI đó để dịch. Việc lưu dữ liệu tuân theo điều khoản của nhà cung cấp.
-- Extension không có máy chủ riêng và không thu thập dữ liệu gì.
+- API key chỉ lưu trên máy bạn (`chrome.storage.local`) và chỉ được gửi tới nhà cung cấp hoặc Base URL bạn chọn.
+- Ảnh trang truyện được gửi tới nhà cung cấp AI đó để dịch; việc lưu dữ liệu theo điều khoản của họ.
+- Extension không có máy chủ riêng và không thu thập dữ liệu gì. Quyền `tabs` chỉ dùng để biết tab vừa tải có thuộc site bạn bật **Tự dịch** hay không.
 
 <a id="faq"></a>
 
-## Câu hỏi thường gặp
+## Hỏi đáp
+
+<details>
+<summary><b>Ô dịch lệch hoặc còn lộ chữ gốc</b></summary>
+
+Ô được khớp lại theo điểm ảnh và có bước dịch bù, nhưng bong bóng không viền liền với vùng tranh trắng có thể làm ô nới chưa chuẩn. Model mạnh hơn (hoặc gọi thẳng nhà cung cấp thay vì qua cổng trung gian) cho vị trí tốt hơn hẳn. Bấm vào ô để xem chữ gốc bên dưới.
+</details>
+
+<details>
+<summary><b>Xưng hô vẫn sai (vd anh/em bị đảo)</b></summary>
+
+Bật **Trau chuốt văn phong & xưng hô**. Nếu AI đã ghi sai quan hệ vào trí nhớ, mở **Cài đặt → Trí nhớ AI** và sửa dòng đó, ví dụ `Ken ↔ Mio (anh trai ↔ em gái): Ken xưng anh gọi Mio là em; Mio xưng em gọi Ken là anh hai`. Trang sau sẽ theo ngay. Trang đã dịch nằm trong bộ nhớ đệm giữ bản cũ.
+</details>
+
+<details>
+<summary><b>Cổng trung gian báo "quota" / "reset after…" / 503</b></summary>
+
+Cổng đang hết lượt cho model đó. Extension tự chờ và gọi lại (tối đa 2 lần, mỗi lần ≤ 5 phút). Nếu vẫn lỗi, thử model khác trong trang cài đặt (nút **Thử** từng model) hoặc đợi cổng hồi quota.
+</details>
 
 <details>
 <summary><b>Cứ hiện "Đang dịch…" rất lâu</b></summary>
 
-Model đang chậm hoặc quá tải. Sau 150 giây không có phản hồi, trang báo lỗi và hiện nút **Thử lại**. Hãy chọn model nhanh hơn trong popup; thời gian gọi thử của từng model hiện ngay trong popup.
+Model chậm hoặc quá tải. Sau 150 giây trang báo lỗi kèm nút **Thử lại**. Chọn model nhanh hơn: trang cài đặt hiện thời gian gọi thử của từng model.
 </details>
 
 <details>
-<summary><b>Ô dịch lệch, gộp hai bong bóng, hoặc còn lộ chữ gốc</b></summary>
+<summary><b>"Provider returned error" hoặc lỗi JSON schema</b></summary>
 
-Vị trí ô do model ước lượng, rồi được khớp lại theo điểm ảnh. Khi ô của model hụt quá nhiều, bước khớp chỉ nới tối đa gấp 2 lần để tránh che tranh, nên đôi khi vẫn lộ vài dòng chữ gốc. Model nhỏ cũng có lúc gộp 2 bong bóng sát nhau hoặc bỏ sót bong bóng nhỏ. Model lớn hơn thường chính xác hơn.
-</details>
-
-<details>
-<summary><b>Xưng hô vẫn lẫn lộn</b></summary>
-
-Hãy bật **Trau chuốt văn phong**: bảng xưng hô chỉ hoạt động khi bước này bật. Bảng được giữ cho cả tab, nên các trang đọc trước khi có bảng (hoặc lấy từ bộ nhớ đệm) có thể còn xưng hô cũ.
-</details>
-
-<details>
-<summary><b>Gemini báo "high demand" hoặc "quota exceeded"</b></summary>
-
-"High demand" là quá tải tạm thời, bấm **Thử lại** sau ít phút. "Quota exceeded … limit: 0" nghĩa là model đó không có trong gói miễn phí của bạn; popup tự bỏ qua và chọn model khác.
-</details>
-
-<details>
-<summary><b>Có hỗ trợ xAI (Grok) hay Mistral không?</b></summary>
-
-Chưa có mục riêng, vì tài liệu hiện tại của hai hãng chưa xác nhận đủ cách gửi ảnh và JSON theo schema. Bạn dùng được các model Grok, Mistral… qua **OpenRouter**, hoặc thử nhà cung cấp **Tùy chỉnh** với Base URL tương thích OpenAI của hãng (chưa được test; bước gọi thử sẽ cho biết có chạy hay không).
-</details>
-
-<details>
-<summary><b>Có dịch được hiệu ứng âm thanh (SFX) không?</b></summary>
-
-Chỉ dịch khi SFX ngắn và có nghĩa với cảnh. Ảnh hiển thị nhỏ hơn 200px (ảnh đại diện, ảnh bìa nhỏ) được bỏ qua.
+Từ bản 0.5 lỗi hiện nguyên nhân thật của nhà cung cấp. Lỗi schema kiểu *"required … Missing 'x'"* là do model không hỗ trợ JSON schema strict; chọn model khác.
 </details>
 
 <a id="phat-trien"></a>
@@ -213,23 +234,24 @@ Chỉ dịch khi SFX ngắn và có nghĩa với cảnh. Ảnh hiển thị nh�
 <summary><b>Cấu trúc mã nguồn</b></summary>
 
 ```
-manga-dich/                 thư mục extension (Load unpacked thư mục này)
-├── manifest.json           Manifest V3
-├── background.js           Gọi API các nhà cung cấp (theo Base URL), gộp ô trùng (mergeBubbles), trau chuốt, bảng xưng hô + trí nhớ theo site, ngủ theo đếm ngược quota, bộ nhớ đệm, gọi thử model
-├── content.js              Chọn trang cần dịch, mã hóa ảnh, tách ô chồng nhau (separate), vẽ lớp bản dịch theo nhãn style, nút Thử lại
-├── fit.js                  Khớp ô dịch vào bong bóng theo điểm ảnh, lấy màu nền
-└── popup.html / popup.js   Cài đặt: nhà cung cấp, key, Base URL, model, trau chuốt, xem/xoá trí nhớ AI theo site (có chế độ tối)
-test-background.js          Test unit (không gọi mạng)
-test-v04.js                 Test unit tính năng v0.4: mergeBubbles, nhãn style, ngủ theo quota, trí nhớ theo site, separate()
-test-fit.js                 Đo fit.js trên điểm ảnh thật: chữ gốc được che, phần lấn ra tranh
-test-live.js                Test thật: dịch 1 trang, chấm vị trí ô dịch theo đáp án
-test-ab.js                  Test thật chạy lặp N lần một model để so sánh prompt (A/B)
-test-probe.js               Test thật bước gọi thử model của popup
-test-polish.js              Test thật bước trau chuốt văn phong
-test-tokens.js              Đo token thật theo kích thước ảnh
-draw-boxes.py               Vẽ ô của model (đỏ) và đáp án (xanh) lên ảnh
-draw-probe.py               Tạo ảnh 2 bong bóng cho test-probe.js
-test-fixtures/page4.truth.json   Vị trí 14 bong bóng của trang test (đo tay)
+manga-dich/                   thư mục extension (Load unpacked thư mục này)
+├── manifest.json             Manifest V3: popup, trang cài đặt, phím tắt
+├── background.js             Gọi API (theo Base URL), prompt đọc ảnh + trau chuốt (xưng hô, thể loại),
+│                             hàng đợi, bộ nhớ đệm, trí nhớ theo site, tự dịch theo site, phím tắt
+├── content.js                Chọn trang cần dịch, vẽ lớp bản dịch, dịch bù vùng sót, nút Thử lại
+├── fit.js                    Khớp ô theo điểm ảnh: sửa đảo trục, neo vào chữ, nới lòng bong bóng; textBlocks()
+├── text.js                   Ngắt dòng theo dáng bong bóng; dò trang không có chữ
+├── popup.html / popup.js     Popup gọn: Dịch trang này, tự dịch theo site, công tắc nhanh
+├── options.html / options.js Trang cài đặt (mở trong tab, tự lưu): kết nối AI, model, cách dịch, trí nhớ AI
+└── ui.css                    Giao diện chung (sáng/tối theo trình duyệt)
+test-background.js            Test unit API/nhà cung cấp (không gọi mạng)
+test-v04.js                   Test unit: gộp ô, style, quota, trí nhớ theo site, separate()
+test-v05.js                   Test unit: sửa đảo trục, neo ô, textBlocks, schema strict, prompt xưng hô/thể loại, UI
+test-text.js                  Test ngắt dòng + dò trang không chữ
+test-fit.js                   Đo fit.js trên điểm ảnh thật
+test-live.js / test-ab.js     Test thật: dịch 1 trang, chấm vị trí ô theo đáp án; so sánh prompt A/B
+test-probe.js / test-polish.js / test-tokens.js   Test thật bước gọi thử, trau chuốt, đo token
+draw-boxes.py                 Vẽ ô của model (đỏ) và đáp án (xanh) lên ảnh
 ```
 
 </details>
@@ -239,56 +261,31 @@ test-fixtures/page4.truth.json   Vị trí 14 bong bóng của trang test (đo t
 
 <br>
 
-Cần [Node.js](https://nodejs.org) 18 trở lên. Các script `.py` cần Python và Pillow (`pip install pillow`).
+Cần [Node.js](https://nodejs.org) 18+. Các script `.py` cần Python và Pillow (`pip install pillow`).
 
 ```bash
-node test-background.js
+node test-background.js && node test-v04.js && node test-v05.js && node test-text.js
 ```
 
-Test thật cần API key trong file `.env` ở thư mục gốc (đã nằm trong `.gitignore`):
+Test thật cần key trong file `.env` ở thư mục gốc (đã nằm trong `.gitignore`):
 
 ```
 GEMINI_API_KEY=...
 OPENROUTER_API_KEY=...
-GROQ_API_KEY=...
+CUSTOM_API_KEY=...                      # cổng trung gian (nhà cung cấp Tùy chỉnh)
+CUSTOM_BASE_URL=https://gatecheap.vn/v1
 ```
 
-Cổng trung gian qua nhà cung cấp **Tùy chỉnh** thì thêm hai dòng (test-live/test-ab sẽ gọi đúng Base URL đó):
-
-```
-CUSTOM_API_KEY=...
-CUSTOM_BASE_URL=https://ten-cung-trung-gian/v1
-```
-
-Ảnh trang truyện dùng để test **không có trong repo** vì thuộc bản quyền của tác giả và nhóm dịch. Hãy tự lưu một trang thành `test-fixtures/page4.png`. File đáp án `page4.truth.json` khớp với trang 4, chương 12 của *Bijin de Okane Mochi no Kanojo ga Hoshii to Ittara…* trên MangaDex (ảnh 768×1087). Nếu dùng trang khác, hãy tự đo lại đáp án rồi kiểm tra bằng `draw-boxes.py`.
+Ảnh trang truyện dùng để test **không có trong repo** (bản quyền của tác giả và nhóm dịch). Tự lưu trang thành `test-fixtures/page4.png` / `page5.png`. Các file `*.truth.json` khớp trang 4–5, chương 12 của *Bijin de Okane Mochi no Kanojo ga Hoshii to Ittara…* trên MangaDex (768×1087).
 
 ```bash
-node test-live.js test-fixtures/page4.png
-```
-
-So sánh hai phiên bản prompt (mỗi phiên bản chạy vài lần rồi lấy trung bình, vì model trả về hơi khác nhau mỗi lần; `BG` trỏ tới file background.js cũ):
-
-```bash
-git show HEAD:manga-dich/background.js > "$TEMP/bg-cu.js"
-BG="$TEMP/bg-cu.js" node test-ab.js gpt-5.6-sol 4   # bản cũ
-node test-ab.js gpt-5.6-sol 4                       # bản hiện tại
-```
-
-```bash
-python draw-probe.py test-fixtures/probe.png
-```
-
-```bash
-node test-probe.js gemini gemini-3.1-flash-lite
-```
-
-`test-live.js` lưu kết quả vào `test-fixtures/result-*.json`, và `test-fit.js` đo `fit.js` trên các kết quả đó (cần ảnh ở dạng RGBA thô, cách tạo ghi ở đầu file):
-
-```bash
+node test-live.js test-fixtures/page4.png               # mọi nhà cung cấp có key
+ONLY=custom MODEL_CUSTOM=gpt-6.1-terra node test-live.js test-fixtures/page5.png
+python -c "from PIL import Image; open('page4.rgba','wb').write(Image.open('test-fixtures/page4.png').convert('RGBA').tobytes())"
 node test-fit.js page4.rgba test-fixtures/result-*.json
 ```
 
-Một trang **ĐẠT** khi ít nhất 80% bong bóng có ô dịch đặt lên và ít nhất 80% ô dịch nằm đúng một bong bóng. Có thể đặt `ONLY=gemini` để chỉ test một nhà cung cấp, `MODEL_GEMINI=tên-model` để test một model cụ thể.
+Một trang **ĐẠT** khi ít nhất 80% bong bóng có ô dịch đặt lên và ít nhất 80% ô dịch nằm đúng một bong bóng.
 
 </details>
 

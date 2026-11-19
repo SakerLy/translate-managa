@@ -2,149 +2,67 @@
 <html lang="vi">
 <meta charset="utf-8">
 <title>Manga Dịch</title>
+<link rel="stylesheet" href="ui.css">
 <style>
-  :root {
-    --bg: #ffffff; --surface: #f5f5f7; --border: #dcdce0; --text: #1c1c1f; --muted: #6b6b73;
-    --accent: #ff6740; --accent-text: #ffffff; --ok: #1f8a4c; --err: #c4321c; --focus: #ff674055;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg: #1c1c1f; --surface: #26262b; --border: #3a3a41; --text: #ececf0; --muted: #a0a0aa; --ok: #4cc283; --err: #ff7a66; }
-  }
-  * { box-sizing: border-box; }
-  body { width: 360px; margin: 0; background: var(--bg); color: var(--text); font: 13px/1.45 "Segoe UI", system-ui, sans-serif; }
-  header { display: flex; align-items: center; gap: 10px; padding: 14px 16px 10px; }
-  .logo { width: 30px; height: 30px; border-radius: 8px; background: var(--accent); color: var(--accent-text);
-    display: grid; place-items: center; font-weight: 700; font-size: 13px; letter-spacing: -0.5px; }
-  header h1 { font-size: 15px; margin: 0; flex: 1; }
-  .pill { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--surface); color: var(--muted); border: 1px solid var(--border); }
-  .pill.ready { color: var(--ok); border-color: currentColor; }
-  main { padding: 0 16px 14px; }
-  .primary { width: 100%; padding: 10px; border: 0; border-radius: 8px; background: var(--accent); color: var(--accent-text);
-    font: 600 14px "Segoe UI", system-ui, sans-serif; cursor: pointer; }
-  .primary:disabled { opacity: .45; cursor: not-allowed; }
-  .hint { color: var(--muted); font-size: 12px; margin: 6px 0 0; }
-  .stale { margin-bottom: 12px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--err); color: var(--text); background: var(--surface); }
-  .stale b { display: block; color: var(--err); margin-bottom: 2px; }
-  .stale .primary { margin-top: 8px; }
-  .stale[hidden] { display: none; }
-  section { margin-top: 14px; padding: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
-  section h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 10px; }
-  .field { margin-bottom: 10px; }
-  .field > label { display: flex; justify-content: space-between; align-items: baseline; font-weight: 600; margin-bottom: 4px; }
-  .field > label a { font-weight: 400; font-size: 12px; color: var(--accent); text-decoration: none; }
-  input, select { width: 100%; padding: 7px 9px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font: inherit; }
-  input:focus, select:focus, button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
-  .with-btn { display: flex; gap: 6px; }
-  .with-btn input { flex: 1; min-width: 0; }
-  .icon-btn { flex: none; padding: 0 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); cursor: pointer; font: inherit; }
-  .secondary { width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font: 600 13px "Segoe UI", system-ui, sans-serif; cursor: pointer; }
-  .switch { display: flex; align-items: center; gap: 10px; cursor: pointer; position: relative; }
-  /* real checkbox stays focusable/announced, just invisible; the track is drawn next to it
-     (::after on <input> rendered the knob in the wrong place in Chromium) */
-  .switch input { position: absolute; opacity: 0; width: 34px; height: 20px; margin: 0; }
-  .track { flex: none; width: 34px; height: 20px; border-radius: 999px; background: var(--border); position: relative; transition: background .15s; }
-  .track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .15s; }
-  .switch input:checked + .track { background: var(--accent); }
-  .switch input:checked + .track::after { transform: translateX(14px); }
-  .switch input:focus-visible + .track { outline: 2px solid var(--focus); outline-offset: 1px; }
-  .switch small { display: block; color: var(--muted); font-weight: 400; }
-  #msg { margin-top: 10px; min-height: 1.4em; white-space: pre-wrap; word-break: break-word; }
-  #msg.ok { color: var(--ok); } #msg.err { color: var(--err); }
-  details { margin-top: 8px; }
-  summary { cursor: pointer; color: var(--muted); font-size: 12px; }
-  #results { margin: 6px 0 0; padding: 0; list-style: none; font-size: 12px; max-height: 150px; overflow: auto; }
-  #results li { padding: 3px 0; border-bottom: 1px solid var(--border); word-break: break-word; }
-  #results .ok { color: var(--ok); } #results .err { color: var(--err); }
-  footer { padding: 0 16px 12px; color: var(--muted); font-size: 11px; display: flex; justify-content: space-between; }
+  body { width: 340px; background: var(--card); }
+  header { display: flex; align-items: center; gap: 10px; padding: 14px 14px 12px; border-bottom: 1px solid var(--border); }
+  header h1 { font-size: 15px; line-height: 1.2; }
+  header .sub { font-size: 11.5px; color: var(--muted); }
+  .gear { margin-left: auto; width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); display: grid; place-items: center; }
+  .gear:hover { background: var(--surface); }
+  main { padding: 14px; display: grid; gap: 12px; }
+  .site { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .site b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .box { padding: 4px 12px; border: 1px solid var(--border); border-radius: 12px; }
+  .setup { text-align: center; padding: 18px 14px; border: 1px dashed var(--border); border-radius: 12px; }
+  .setup p { margin: 4px 0 12px; color: var(--muted); }
+  .model { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+  .model span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  footer { padding: 10px 14px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; font-size: 11.5px; color: var(--muted); }
   footer a { color: inherit; }
 </style>
 
 <header>
   <div class="logo" aria-hidden="true">MD</div>
-  <h1>Manga Dịch</h1>
-  <span class="pill" id="state">Chưa cài đặt</span>
+  <div><h1>Manga Dịch</h1><div class="sub" id="sub">Dịch manga sang tiếng Việt</div></div>
+  <button class="gear" id="settings" type="button" title="Cài đặt" aria-label="Mở cài đặt">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+  </button>
 </header>
 
 <main>
-  <div class="stale" id="stale" role="alert" hidden>
-    <b>Extension vừa được cập nhật nhưng chưa tải lại.</b>
-    Bấm nút dưới đây, rồi tải lại (F5) trang truyện đang mở.
-    <button class="primary" id="reload" type="button">Tải lại extension</button>
+  <div class="banner" id="stale" role="alert" hidden>
+    <b>Extension vừa cập nhật nhưng chưa tải lại.</b>
+    Bấm nút dưới, rồi F5 trang truyện.
+    <button class="btn small primary" id="reload" type="button" style="margin-top:6px">Tải lại extension</button>
   </div>
-  <button class="primary" id="go" disabled>Bật dịch tự động cho tab này</button>
-  <p class="hint">Dịch trang đang xem trước, rồi các trang kế tiếp. Trang lỗi có nút Thử lại ngay trên trang.</p>
 
-  <section aria-labelledby="h-settings">
-    <h2 id="h-settings">Cài đặt</h2>
+  <div class="setup" id="setup" hidden>
+    <b>Chưa kết nối AI</b>
+    <p>Chọn nhà cung cấp và dán API key - có lựa chọn miễn phí. Trang cài đặt mở trong tab mới nên không lo mất chữ đang gõ.</p>
+    <button class="btn primary big" id="setup-go" type="button">Mở cài đặt</button>
+  </div>
 
-    <div class="field">
-      <label for="provider">Nhà cung cấp AI</label>
-      <select id="provider">
-        <option value="gemini">Google Gemini</option>
-        <option value="openrouter">OpenRouter</option>
-        <option value="groq">Groq</option>
-        <option value="anthropic">Anthropic Claude</option>
-        <option value="openai">OpenAI GPT</option>
-        <option value="custom">Tùy chỉnh</option>
-      </select>
-    </div>
+  <div id="ready" hidden>
+    <button class="btn primary big" id="go" type="button">Dịch trang này</button>
+    <button class="btn big" id="stop" type="button" hidden style="margin-top:8px">Dừng dịch tab này</button>
+    <div class="model" style="margin-top:8px"><span id="model"></span><button class="linkbtn" id="change" type="button">Đổi</button></div>
+  </div>
 
-    <div class="field">
-      <label for="key">API key <a id="getkey" href="#" target="_blank" rel="noopener">Lấy key</a></label>
-      <div class="with-btn">
-        <input id="key" type="password" placeholder="Dán API key" autocomplete="off" spellcheck="false">
-        <button class="icon-btn" id="eye" type="button" aria-label="Hiện key">Hiện</button>
-      </div>
-    </div>
+  <div class="box" id="quick" hidden>
+    <label class="switch"><input type="checkbox" id="auto"><span class="track" aria-hidden="true"></span>
+      <span class="txt">Tự dịch trên <span id="host">site này</span><small>Mở chapter là tự dịch, khỏi bấm lại</small></span></label>
+    <label class="switch"><input type="checkbox" id="polish"><span class="track" aria-hidden="true"></span>
+      <span class="txt">Trau chuốt văn phong &amp; xưng hô<small>Thêm 1 lượt gọi, câu tự nhiên hơn</small></span></label>
+    <label class="switch"><input type="checkbox" id="sfx"><span class="track" aria-hidden="true"></span>
+      <span class="txt">Dịch cả SFX<small>Đổi ngay trên trang, không gọi lại</small></span></label>
+  </div>
 
-    <div class="field">
-      <label for="base">Base URL</label>
-      <input id="base" type="url" spellcheck="false" autocomplete="off">
-      <p class="hint" id="base-hint"></p>
-    </div>
-
-    <button class="secondary" id="save">Lưu và tìm model</button>
-
-    <div class="field" style="margin-top:10px">
-      <label for="model">Model</label>
-      <input id="model" list="models" placeholder="Chọn hoặc gõ tên model" spellcheck="false" autocomplete="off">
-      <datalist id="models"></datalist>
-    </div>
-
-    <label class="switch">
-      <input type="checkbox" id="polish">
-      <span class="track" aria-hidden="true"></span>
-      <span>Trau chuốt văn phong<small>Thêm 1 lượt gọi chỉ có chữ; giữ xưng hô nhất quán</small></span>
-    </label>
-
-    <label class="switch">
-      <input type="checkbox" id="sfx" checked>
-      <span class="track" aria-hidden="true"></span>
-      <span>Dịch cả SFX (từ tượng thanh)<small>Tắt để chỉ giữ lời thoại; trang đã dịch đổi ngay, không gọi lại</small></span>
-    </label>
-
-    <label class="switch">
-      <input type="checkbox" id="textOnly" checked>
-      <span class="track" aria-hidden="true"></span>
-      <span>Bỏ qua trang không có chữ<small>Xem nhanh trang chỉ có tranh (bìa, minh họa); có nút "Vẫn dịch" trên trang</small></span>
-    </label>
-
-    <section style="margin-top:12px;padding:10px;background:var(--bg);border:1px solid var(--border);border-radius:8px">
-      <h2 style="font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 6px">AI đã học về site này</h2>
-      <div id="memview" style="font-size:12px;color:var(--muted);white-space:pre-wrap;max-height:110px;overflow:auto">-</div>
-      <button class="secondary" id="memreset" style="margin-top:8px;padding:5px 8px;font-size:12px">Xoá trí nhớ site này</button>
-    </section>
-
-    <div id="msg" role="status"></div>
-    <details id="details" hidden>
-      <summary id="summary">Kết quả gọi thử</summary>
-      <ul id="results"></ul>
-    </details>
-  </section>
+  <div class="model" id="mem" hidden><span id="mem-text"></span><button class="linkbtn" id="mem-open" type="button">Xem / sửa</button></div>
 </main>
 
 <footer>
-  <span>Key chỉ lưu trên máy bạn</span>
+  <span>Phím tắt: Alt+Shift+D</span>
   <a href="https://github.com/SakerLy/translate-managa" target="_blank" rel="noopener">GitHub</a>
 </footer>
 

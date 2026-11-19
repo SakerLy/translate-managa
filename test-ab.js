@@ -29,7 +29,7 @@ const key = process.env[process.env.KEY_ENV || KEY_ENV[provider]];
 const base = process.env.BASE_URL || (provider === 'custom' ? process.env.CUSTOM_BASE_URL : '');
 
 let listener;
-const ctx = { fetch, btoa, AbortSignal, URL, chrome: { runtime: { onMessage: { addListener: (f) => (listener = f) } } } };
+const ctx = { fetch, btoa, AbortSignal, URL, chrome: { runtime: { onMessage: { addListener: (f) => (listener = f) }, onConnect: { addListener() {} } } } };
 vm.createContext(ctx);
 vm.runInContext(fs.readFileSync(process.env.BG || path.join(__dirname, 'manga-dich/background.js'), 'utf8'), ctx);
 const call = (msg) => new Promise((res) => listener(msg, null, res));

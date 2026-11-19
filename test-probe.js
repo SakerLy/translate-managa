@@ -8,7 +8,7 @@ for (const line of fs.readFileSync(path.join(__dirname, '.env'), 'utf8').split(/
 const [provider, ...models] = process.argv.slice(2);
 const key = process.env[{ anthropic: 'ANTHROPIC_API_KEY', openai: 'OPENAI_API_KEY', gemini: 'GEMINI_API_KEY', openrouter: 'OPENROUTER_API_KEY', groq: 'GROQ_API_KEY' }[provider]];
 let listener;
-const ctx = { fetch, btoa, AbortSignal, URL, chrome: { runtime: { onMessage: { addListener: (f) => (listener = f) } } } };
+const ctx = { fetch, btoa, AbortSignal, URL, chrome: { runtime: { onMessage: { addListener: (f) => (listener = f) }, onConnect: { addListener() {} } } } };
 vm.createContext(ctx);
 vm.runInContext(fs.readFileSync(path.join(__dirname, 'manga-dich/background.js'), 'utf8'), ctx);
 const img = fs.readFileSync(path.join(__dirname, 'test-fixtures/probe.png')).toString('base64');
