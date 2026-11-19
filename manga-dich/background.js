@@ -491,8 +491,9 @@ function providerFor(id, base) {
         try {
           return anyIds(await api(`${this.base}/models`, { headers: P.listHeaders(key) }), id === 'gemini');
         } catch (e) {
-          // most OpenAI-style servers live under /v1; a bare host usually answers 404 with an HTML page
-          if (/404/.test(e.message) && !/\/v\d+[a-z]*$/i.test(this.base)) throw new Error(`${e.message} - thử thêm /v1 vào cuối Base URL (vd ${this.base}/v1)`);
+          // servers mount the OpenAI-style API at different paths (/v1, /api/v1, /openai/v1, none…): a 404
+          // means the path is wrong - point at the docs instead of guessing one
+          if (/404/.test(e.message)) throw new Error(`${e.message} - kiểm tra lại Base URL theo tài liệu của server (phần địa chỉ đứng trước /chat/completions)`);
           throw e;
         }
       },

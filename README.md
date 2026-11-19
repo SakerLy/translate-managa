@@ -119,7 +119,7 @@ Trang đang gọi API dở thì vẫn chạy nốt ở nền. Kết quả đư�
 | **OpenAI** (GPT) | [platform.openai.com](https://platform.openai.com/api-keys) | Trả phí |
 | **Tùy chỉnh** | Cổng trung gian, Ollama, LM Studio… | Theo server. |
 
-**Cổng trung gian bán API nhiều hãng** (vd `https://ten-cong.example/v1`): chọn **Tùy chỉnh**, dán Base URL có `/v1` ở cuối và key của cổng. Cổng này nói theo chuẩn OpenAI cho mọi model, kể cả Claude và Gemini. Danh sách model được đọc nguyên văn, và bước gọi thử sẽ quyết định model nào dùng được.
+**Cổng trung gian bán API nhiều hãng**: chọn **Tùy chỉnh**, dán đúng Base URL ghi trong tài liệu của cổng (phần địa chỉ đứng trước `/chat/completions`; mỗi bên một kiểu, có bên có `/v1`, có bên không) và key của cổng. Cổng kiểu này thường nói theo chuẩn OpenAI cho mọi model, kể cả Claude và Gemini. Danh sách model được đọc nguyên văn, và bước gọi thử sẽ quyết định model nào dùng được.
 
 | Server chạy trên máy | Base URL |
 |---|---|
@@ -273,7 +273,7 @@ Test thật cần key trong file `.env` ở thư mục gốc (đã nằm trong `
 GEMINI_API_KEY=...
 OPENROUTER_API_KEY=...
 CUSTOM_API_KEY=...                      # cổng trung gian (nhà cung cấp Tùy chỉnh)
-CUSTOM_BASE_URL=https://ten-cong.example/v1
+CUSTOM_BASE_URL=...                     # Base URL theo tài liệu của cổng
 ```
 
 Ảnh trang truyện dùng để test **không có trong repo** (bản quyền của tác giả và nhóm dịch). Tự lưu trang thành `test-fixtures/page4.png` / `page5.png`. Các file `*.truth.json` khớp trang 4–5, chương 12 của *Bijin de Okane Mochi no Kanojo ga Hoshii to Ittara…* trên MangaDex (768×1087).

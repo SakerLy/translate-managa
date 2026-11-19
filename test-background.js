@@ -88,10 +88,13 @@ const call = (msg) => new Promise((res) => listener(msg, null, res));
     assert.deepEqual(await shape(['a', 'b', 'a', '']), ['a', 'b']);
     assert.deepEqual(await shape({ data: [{ id: 'm1' }, { name: 'm2' }, {}, null] }), ['m1', 'm2']);
     assert.deepEqual(await shape({ unexpected: true }), []);
-    // bare host: 404 HTML page -> hint to add /v1; a base already ending in /v1 gets no hint
+    // 404 = wrong path: point at the server's docs, never guess a /v1 (servers mount the API differently)
     ctx.fetch = async () => ({ ok: false, status: 404, json: async () => { throw new SyntaxError('html'); } });
-    assert.match((await call({ type: 'models', provider: 'custom', key: '', base: 'https://gateway.example' })).error, /thêm \/v1.*gateway\.example\/v1/);
-    assert.doesNotMatch((await call({ type: 'models', provider: 'custom', key: '', base: 'https://gateway.example/v1' })).error, /thêm \/v1/);
+    for (const base of ['https://gateway.example', 'https://gateway.example/v1']) {
+      const err = (await call({ type: 'models', provider: 'custom', key: '', base })).error;
+      assert.match(err, /tài liệu của server/);
+      assert.doesNotMatch(err, /thêm \/v1/);
+    }
     ctx.fetch = f0;
   }
 
