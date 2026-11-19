@@ -172,7 +172,7 @@ async function fetchImage(url) {
 
 const TIMEOUT_S = 150; // a hung or very slow model must surface as an error, not an endless "Đang dịch…"
 
-// gatecheap-style gateways answer 503/403 with a per-provider quota countdown ("reset after 1m 50s").
+// Some API gateways answer 503/403 with a per-provider quota countdown ("reset after 1m 50s").
 // Sleeping through it INSIDE the same call beats burning the queue's 3 fast retries: the page still
 // translates on its own instead of ending at "Thử lại". Two sleeps max, ≤5 min each, then give up.
 const RESET_IN = /reset after (?:(\d+)m)?\s*(?:(\d+)(?:\s*s)?)?/;

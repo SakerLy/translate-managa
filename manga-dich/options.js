@@ -11,7 +11,7 @@ const KEY_PAGES = {
   anthropic: 'https://console.anthropic.com/settings/keys',
   openai: 'https://platform.openai.com/api-keys',
 };
-const CUSTOM_HINT = 'Bắt buộc. Cổng trung gian: dán địa chỉ có /v1 (vd https://gatecheap.vn/v1). Máy bạn: Ollama http://localhost:11434/v1 · LM Studio http://localhost:1234/v1';
+const CUSTOM_HINT = 'Bắt buộc. Cổng trung gian: dán địa chỉ có /v1 ở cuối. Máy bạn: Ollama http://localhost:11434/v1 · LM Studio http://localhost:1234/v1';
 const BASE_HINT = 'Để trống để dùng địa chỉ mặc định (chữ mờ). Cổng trung gian bán key nhiều hãng: chọn “Tùy chỉnh”.';
 
 let st, defaults = {};
@@ -33,7 +33,7 @@ function showProvider(p) {
   $('key').value = st.keys[p] || '';
   $('key').placeholder = p === 'custom' ? 'Key của cổng (bỏ trống nếu server trên máy)' : 'Dán API key';
   $('base').value = st.bases[p] || '';
-  $('base').placeholder = defaults[p] || 'https://gatecheap.vn/v1';
+  $('base').placeholder = defaults[p] || 'https://.../v1';
   $('base-hint').textContent = p === 'custom' ? CUSTOM_HINT : BASE_HINT;
   $('getkey').hidden = !KEY_PAGES[p];
   $('getkey').href = KEY_PAGES[p] || '#';
