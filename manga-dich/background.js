@@ -518,9 +518,9 @@ async function cachePut(key, bubbles) {
   }
 }
 
-// ---------- học hỏi tích lũy (memory theo site, sống qua reload/chapter) ----------
-// Bảng xưng hô + tên riêng + ghi chú văn phong cho mỗi site truyện, lưu trong chrome.storage.local
-// dưới khóa "mem:<site>". Mỗi trang: load -> đút vào prompt -> polish -> gộp lại cái mới học được.
+// ---------- học hỏi tích lũy (memory theo bộ truyện, sống qua reload/chapter) ----------
+// Bảng xưng hô + tên riêng + ghi chú văn phong cho mỗi bộ truyện (series.js; không nhận ra bộ thì theo site),
+// lưu trong chrome.storage.local dưới khóa "mem:<host/series>". Mỗi trang: load -> đút vào prompt -> polish -> gộp lại cái mới học được.
 // Đây là "AI học sau mỗi lần dịch": chapter sau dùng đúng xưng hô/tên riêng chapter trước đã chốt.
 const MEM_MAX = 4000; // ký tự mỗi mục; đủ cho cả series, prompt không phình
 async function loadMem(site) {
@@ -532,6 +532,7 @@ async function loadMem(site) {
 async function saveMem(site, mem) {
   if (!site) return;
   await chrome.storage.local.set({ ['mem:' + site]: {
+    label: String(mem.label ?? '').slice(0, 120), // series name shown in the settings page
     glossary: String(mem.glossary ?? '').slice(0, MEM_MAX),
     names: [...new Set((mem.names || []).map(String))].slice(0, 60),
     notes: [...new Set((mem.notes || []).map(String))].slice(0, 30),
@@ -654,7 +655,7 @@ async function run(item) {
 }
 
 // translate(): resolve provider + cache check, then hand the work to the queue
-async function translate({ data, mime, url, context, glossary = '', site, urgent, onDraft, part = false, tag, draftPort }) {
+async function translate({ data, mime, url, context, glossary = '', site, seriesLabel = '', urgent, onDraft, part = false, tag, draftPort }) {
   if (!data) ({ data, mime } = await fetchImage(url));
   const { provider = 'anthropic', keys = {}, models = {}, bases = {}, polish: polishOn = true, sfx = true }
     = await chrome.storage.local.get(['provider', 'keys', 'models', 'bases', 'polish', 'sfx']);
@@ -664,7 +665,7 @@ async function translate({ data, mime, url, context, glossary = '', site, urgent
   const key = await cacheKey(models[provider] + (doPolish ? '+p' : '') + (sfx ? '' : '-sfx') + (part ? '+part' : ''), data);
   const hit = (await chrome.storage.local.get(key))[key];
   if (hit) return { bubbles: hit.bubbles, glossary }; // same page already translated by this model: no API call
-  const job = { key, data, mime, context, glossary, site, provider, base: bases[provider], model: models[provider], apiKey: keys[provider], doPolish, sfx, part };
+  const job = { key, data, mime, context, glossary, site, seriesLabel, provider, base: bases[provider], model: models[provider], apiKey: keys[provider], doPolish, sfx, part };
   return new Promise((resolve) => enqueue(key, job, urgent, resolve, onDraft, tag || draftPort));
 }
 
@@ -673,7 +674,7 @@ async function translate({ data, mime, url, context, glossary = '', site, urgent
 // sfx=false drops the model's SFX-tagged bubbles before polish and before the draft is pushed,
 // so both paints and the cache agree on what the user asked to see.
 async function translateJob(job, onDraft) {
-  const { key, data, mime, context, glossary = '', site, provider, base, model, apiKey, doPolish, sfx = true, part = false } = job;
+  const { key, data, mime, context, glossary = '', site, seriesLabel = '', provider, base, model, apiKey, doPolish, sfx = true, part = false } = job;
   const P = providerFor(provider, base);
   // memory của site: xưng hô/tên riêng/văn phong học từ các trang & chapter trước
   const mem = await loadMem(site).catch(() => ({ glossary: '', names: [], notes: [] }));
@@ -714,7 +715,7 @@ async function translateJob(job, onDraft) {
       names = names.concat(more);
     }
     // học hỏi tích lũy: gộp bảng xưng hô + tên riêng của trang này vào memory của site
-    await learnFromPage(site, mem, g, names).catch(() => {});
+    await learnFromPage(site, { ...mem, label: seriesLabel || mem.label }, g, names).catch(() => {});
   }
   await cachePut(key, bubbles);
   return { bubbles, glossary: g };
@@ -724,7 +725,7 @@ async function translateJob(job, onDraft) {
 // reads its files fresh from disk, but this service worker keeps running the old code until the extension
 // is reloaded; a real report ("Cannot read properties of undefined (reading 'translate')") was a new popup
 // talking to an old worker that had no 'custom' provider.
-const API = 6;
+const API = 7;
 
 // Draft-first streaming: content.js opens a port named "md-draft-<imgsrc-hash>" and names it in the
 // translate message; while that page's job runs we hold the port and push the read pass's boxes
@@ -748,9 +749,9 @@ chrome.runtime.onMessage.addListener((msg, _sender, send) => {
     : msg.type === 'probe' ? probe(msg).then((sample) => ({ sample }))
     : msg.type === 'defaults' ? Promise.resolve({ bases: Object.fromEntries(Object.entries(PROVIDERS).map(([k, p]) => [k, p.base])) })
     : msg.type === 'mem' ? loadMem(msg.site).then((m) => ({ mem: m })) // popup: xem AI đã học gì về site này
-    : msg.type === 'mem-reset' ? saveMem(msg.site, { glossary: '', names: [], notes: [] }).then(() => ({ ok: true }))
+    : msg.type === 'mem-reset' ? loadMem(msg.site).then((m) => saveMem(msg.site, { label: m.label, glossary: '', names: [], notes: [] })).then(() => ({ ok: true }))
     : msg.type === 'mem-save' ? loadMem(msg.site).then((m) => saveMem(msg.site, { ...m, ...msg.mem })).then(() => ({ ok: true })) // settings page: user edits
-    : msg.type === 'mem-list' ? chrome.storage.local.get(null).then((all) => ({ sites: Object.keys(all).filter((k) => k.startsWith('mem:')).map((k) => k.slice(4)) }))
+    : msg.type === 'mem-list' ? chrome.storage.local.get(null).then((all) => ({ sites: Object.keys(all).filter((k) => k.startsWith('mem:')).map((k) => ({ key: k.slice(4), label: all[k]?.label || '' })) }))
     : msg.type === 'start' ? inject(msg.tabId).then(() => ({ ok: true }))
     : msg.type === 'cancel' ? Promise.resolve({ cancelled: cancel(msg.tag) })
     : msg.type === 'fetch-image' ? fetchImage(msg.url) // page canvas tainted by a cross-origin image: hand it clean bytes
@@ -764,7 +765,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, send) => {
 const hostOf = (url) => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return ''; } };
 async function inject(tabId, quiet = false) {
   if (quiet) await chrome.scripting.executeScript({ target: { tabId }, func: () => { window.__mdQuiet = true; } });
-  await chrome.scripting.executeScript({ target: { tabId }, files: ['fit.js', 'text.js', 'content.js'] });
+  await chrome.scripting.executeScript({ target: { tabId }, files: ['fit.js', 'text.js', 'series.js', 'content.js'] });
 }
 // Auto sites: every page load on a host the user switched on starts translating by itself, so a reader
 // never has to open the popup per chapter. quiet: no "no manga page here" notice on the site's other pages.

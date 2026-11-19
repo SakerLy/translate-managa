@@ -33,7 +33,9 @@
   - công sở, người lạ, kẻ thù, samurai/fantasy
 
   Ví dụ đo thật: お兄ちゃん、遅いよ！ → "Anh hai, chậm quá đi!"; ông nói với hai cháu → "Ồ, cả hai đứa đến rồi à."; nữ sinh với mẹ bạn (bản scan Tây Ban Nha) → "Cháu cảm ơn cô đã đưa Momiji về ạ."
-- **AI nhớ qua từng chapter:** bảng xưng hô (kèm quan hệ) và tên riêng được lưu theo từng site. Đổi chapter hay tắt trình duyệt vẫn đúng như trước. **Sửa tay được** trong trang cài đặt nếu AI ghi sai.
+- **AI nhớ riêng từng bộ truyện:** bảng xưng hô (kèm quan hệ) và tên riêng được lưu cho từng bộ, nên đọc nhiều bộ trên cùng một site không bị lẫn xưng hô của bộ này sang bộ kia. Đổi chapter hay tắt trình duyệt vẫn đúng như trước. **Sửa tay được** trong trang cài đặt nếu AI ghi sai.
+  - Bộ truyện được nhận ra từ link về trang bộ truyện (MangaDex) hoặc từ đường dẫn (`/manga/ten-bo/chapter-12`). Site nào không nhận ra được thì dùng chung một trí nhớ cho cả site, như trước.
+  - Lưu ý: AI không tự huấn luyện lại. Nó "học" bằng cách đọc lại ghi chú của các trang trước mỗi khi dịch trang mới.
 - **Không dịch word-by-word:** câu chào, cảm thán, câu đùa, thành ngữ được viết lại theo cách nói tự nhiên của tiếng Việt.
 
 ### Ô dịch khớp bong bóng, không sót chữ
@@ -170,7 +172,7 @@ flowchart LR
     B -- "có" --> F["Bộ nhớ đệm"]
     B -- "chưa" --> C["Đọc ảnh: vị trí,<br/>chữ gốc, ai nói với ai"]
     C --> D["Trau chuốt: văn phong,<br/>xưng hô, tên riêng"]
-    D --> E["Lưu + học vào<br/>trí nhớ của site"]
+    D --> E["Lưu + học vào<br/>trí nhớ của bộ truyện"]
     E --> G["Khớp ô theo điểm ảnh:<br/>sửa đảo trục, neo vào chữ,<br/>nới hết lòng bong bóng"]
     F --> G
     G --> H{"Còn chữ gốc<br/>chưa dịch?"}
@@ -237,16 +239,17 @@ Từ bản 0.5 lỗi hiện nguyên nhân thật của nhà cung cấp. Lỗi sc
 manga-dich/                   thư mục extension (Load unpacked thư mục này)
 ├── manifest.json             Manifest V3: popup, trang cài đặt, phím tắt
 ├── background.js             Gọi API (theo Base URL), prompt đọc ảnh + trau chuốt (xưng hô, thể loại),
-│                             hàng đợi, bộ nhớ đệm, trí nhớ theo site, tự dịch theo site, phím tắt
+│                             hàng đợi, bộ nhớ đệm, trí nhớ theo bộ truyện, tự dịch theo site, phím tắt
 ├── content.js                Chọn trang cần dịch, vẽ lớp bản dịch, dịch bù vùng sót, nút Thử lại
 ├── fit.js                    Khớp ô theo điểm ảnh: sửa đảo trục, neo vào chữ, nới lòng bong bóng; textBlocks()
-├── text.js                   Ngắt dòng theo dáng bong bóng; dò trang không có chữ
+├── text.js                   Dò trang không có chữ
+├── series.js                 Nhận ra bộ truyện đang đọc (khoá trí nhớ AI)
 ├── popup.html / popup.js     Popup gọn: Dịch trang này, tự dịch theo site, công tắc nhanh
 ├── options.html / options.js Trang cài đặt (mở trong tab, tự lưu): kết nối AI, model, cách dịch, trí nhớ AI
 └── ui.css                    Giao diện chung (sáng/tối theo trình duyệt)
 test-background.js            Test unit API/nhà cung cấp (không gọi mạng)
 test-v04.js                   Test unit: gộp ô, style, quota, trí nhớ theo site, separate()
-test-v05.js                   Test unit: sửa đảo trục, neo ô, textBlocks, schema strict, prompt xưng hô/thể loại, UI
+test-v05.js                   Test unit: sửa đảo trục, neo ô, textBlocks, schema strict, prompt manga, huỷ, trí nhớ theo bộ, UI
 test-text.js                  Test ngắt dòng + dò trang không chữ
 test-fit.js                   Đo fit.js trên điểm ảnh thật
 test-live.js / test-ab.js     Test thật: dịch 1 trang, chấm vị trí ô theo đáp án; so sánh prompt A/B

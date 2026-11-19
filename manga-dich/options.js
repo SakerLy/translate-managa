@@ -2,7 +2,7 @@
 // Every input saves to chrome.storage.local as you type; the popup and running pages read from there.
 const $ = (id) => document.getElementById(id);
 const send = (msg) => chrome.runtime.sendMessage(msg).then((r) => { if (r?.error) throw new Error(r.error); return r; });
-const API = 6; // must equal API in background.js
+const API = 7; // must equal API in background.js
 
 const KEY_PAGES = {
   gemini: 'https://aistudio.google.com/apikey',
@@ -197,7 +197,7 @@ for (const id of ['mem-glossary', 'mem-names', 'mem-notes']) $(id).addEventListe
 $('mem-site').onchange = loadMemSite;
 $('mem-reset').onclick = async () => {
   const site = $('mem-site').value;
-  if (!site || !confirm(`Xoá toàn bộ xưng hô và tên riêng AI đã học cho ${site}?`)) return;
+  if (!site || !confirm(`Xoá toàn bộ xưng hô và tên riêng AI đã học cho “${$('mem-site').selectedOptions[0]?.textContent || site}”?`)) return;
   await send({ type: 'mem-reset', site });
   await loadMemSite(); flashSaved();
 };
@@ -221,8 +221,12 @@ $('reload').onclick = () => chrome.runtime.reload();
   renderSites();
   const { sites } = await send({ type: 'mem-list' }).catch(() => ({ sites: [] }));
   const want = new URLSearchParams(location.search).get('site');
-  const all = [...new Set([...(want ? [want] : []), ...sites])];
-  $('mem-site').replaceChildren(...(all.length ? all.map((s) => new Option(s, s)) : [new Option('Chưa có site nào - dịch vài trang trước', '')]));
+  const all = sites.slice();
+  if (want && !all.some((s) => s.key === want)) all.unshift({ key: want, label: '' });
+  // "Kaoru Hana wa Rin to Saku · mangadex.org"; memories from before 0.5.1 were per site: "mangadex.org (cả site)"
+  const name = ({ key, label }) => (key.includes('/') ? `${label || key.split('/').pop()} · ${key.split('/')[0]}` : `${key} (cả site)`);
+  all.sort((a, z) => name(a).localeCompare(name(z)));
+  $('mem-site').replaceChildren(...(all.length ? all.map((s) => new Option(name(s), s.key)) : [new Option('Chưa có bộ nào - dịch vài trang trước', '')]));
   if (want) $('mem-site').value = want;
   loadMemSite();
 })();

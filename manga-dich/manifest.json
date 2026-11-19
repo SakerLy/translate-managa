@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Manga Dịch",
-  "version": "0.5",
-  "description": "Dịch manga sang tiếng Việt ngay trên bong bóng thoại - từ bản gốc tiếng Nhật hay bản scan tiếng Anh, Tây Ban Nha, Indonesia… Tự học xưng hô, tên riêng theo từng site truyện.",
+  "version": "0.5.1",
+  "description": "Dịch manga sang tiếng Việt ngay trên bong bóng thoại - từ bản gốc tiếng Nhật hay bản scan tiếng Anh, Tây Ban Nha, Indonesia… Tự học xưng hô và tên riêng cho từng bộ truyện.",
   "permissions": [
     "storage",
     "activeTab",

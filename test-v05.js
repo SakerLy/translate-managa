@@ -132,6 +132,52 @@ console.log('prompt rules OK');
   assert.equal(calls, 2, 'the cancelled page never reached the API');
   console.log('cancel OK');
 })().then(() => {
+// ---------- memory per series: two series on one site never share a glossary ----------
+}).then(async () => {
+  const sctx = { decodeURIComponent }; vm.createContext(sctx);
+  vm.runInContext(R('manga-dich/series.js'), sctx);
+  const ser = vm.runInContext('mdSeries', sctx);
+  const doc = (links) => ({ querySelectorAll: () => links.map(([h, t]) => ({ getAttribute: () => h, textContent: t })) });
+  const at = (u, links = []) => { const x = new URL(u); return ser({ hostname: x.hostname, pathname: x.pathname }, doc(links)); };
+  // MangaDex: chapter URL has no series; the reader's own /title/<uuid> link (most frequent, not "random") decides
+  const kaoru = ['/title/418791c0-35cf-4f87-936b-acd9cddf0989/kaoru-hana-wa-rin-to-saku', 'Kaoru Hana wa Rin to Saku'];
+  const md = at('https://mangadex.org/chapter/8de3aa89-841d-4fe0-8ecd-072ed9efdde9/4', [['/title/random', 'Random'], kaoru, kaoru]);
+  assert.deepEqual({ ...md }, { key: 'mangadex.org/title/418791c0-35cf-4f87-936b-acd9cddf0989', label: 'Kaoru Hana wa Rin to Saku' });
+  assert.equal(at('https://www.example.com/manga/one-piece/chapter-1000').key, 'example.com/manga/one-piece');
+  assert.equal(at('https://example.com/manga/one-piece/chapter-1001').key, at('https://example.com/manga/one-piece/chapter-1000').key, 'same series, any chapter');
+  assert.equal(at('https://example.com/one-piece-chapter-1000.html').key, 'example.com/one-piece');
+  assert.equal(at('https://example.com/read/frieren/45').label, 'frieren');
+  assert.equal(at('https://example.com/chapter/12345').key, 'example.com', 'unknown series: whole site, like before');
+
+  let store = { provider: 'openai', keys: { openai: 'k' }, models: { openai: 'm' }, polish: true, sfx: true }, listener;
+  const local = { get: async (k) => (k === null ? { ...store } : Object.fromEntries([].concat(k).filter((x) => x in store).map((x) => [x, store[x]]))), set: async (o) => { Object.assign(store, o); }, remove: async () => {} };
+  let reply = '';
+  const c = { AbortSignal, crypto, TextEncoder, URL, setTimeout, clearTimeout, console, btoa,
+    fetch: async (url, init) => {
+      const isPolish = !JSON.parse(init.body).messages[1].content.some((x) => x.type === 'image_url');
+      const content = isPolish ? JSON.stringify({ lines: ['Ừ'], glossary: reply, names: [] })
+        : '{"bubbles":[{"box_2d":[100,100,300,300],"text":"Ừ","src":"うん","who":"","sfx":false,"style":""}]}';
+      return { ok: true, json: async () => ({ choices: [{ message: { content } }] }) };
+    },
+    chrome: { runtime: { onMessage: { addListener: (f) => (listener = f) }, onConnect: { addListener() {} } }, storage: { local } } };
+  vm.createContext(c);
+  vm.runInContext(R('manga-dich/background.js'), c);
+  const call = (m) => new Promise((res) => listener(m, null, res));
+  reply = 'Ken ↔ Mio (anh trai ↔ em gái): Ken xưng anh gọi Mio là em';
+  await call({ type: 'translate', data: 'A1', mime: 'image/jpeg', site: 'mangadex.org/title/aaa', seriesLabel: 'Series A' });
+  reply = 'Sora ↔ cô giáo (học sinh ↔ giáo viên): Sora xưng em gọi cô';
+  await call({ type: 'translate', data: 'B1', mime: 'image/jpeg', site: 'mangadex.org/title/bbb', seriesLabel: 'Series B' });
+  const a = (await call({ type: 'mem', site: 'mangadex.org/title/aaa' })).mem, b = (await call({ type: 'mem', site: 'mangadex.org/title/bbb' })).mem;
+  assert.match(a.glossary, /Ken ↔ Mio/); assert.doesNotMatch(a.glossary, /Sora/, 'series A untouched by series B');
+  assert.match(b.glossary, /Sora/); assert.doesNotMatch(b.glossary, /Ken/, 'series B starts clean');
+  assert.equal(a.label, 'Series A', 'series name kept for the settings page');
+  const { sites } = await call({ type: 'mem-list' });
+  assert.deepEqual(sites.map((s) => s.label).sort(), ['Series A', 'Series B']);
+  await call({ type: 'mem-reset', site: 'mangadex.org/title/aaa' });
+  const reset = (await call({ type: 'mem', site: 'mangadex.org/title/aaa' })).mem;
+  assert.equal(reset.glossary, ''); assert.equal(reset.label, 'Series A', 'reset keeps the name');
+  console.log('memory per series OK');
+}).then(() => {
 // ---------- UI handshake: popup, options and worker agree on the message API ----------
 {
   const api = +R('manga-dich/background.js').match(/const API = (\d+)/)[1];

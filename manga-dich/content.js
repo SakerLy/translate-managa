@@ -18,8 +18,10 @@
   const texts = new WeakMap(); // img -> its translated lines, used as the next page's context
   let active = 0;
   const srcOf = (img) => img.currentSrc || img.src;
-  // site key cho memory tích lũy (xưng hô + tên riêng học qua các chapter): hostname bỏ "www."
+  // Memory key: the series being read (series.js), re-read on every page because readers like MangaDex
+  // switch series without a page load. Falls back to the hostname when the series can't be told.
   const SITE = location.hostname.replace(/^www\./, '');
+  const series = () => (typeof mdSeries === 'function' ? mdSeries() : { key: SITE, label: SITE });
 
   const css = document.createElement('style');
   css.textContent = `
@@ -202,7 +204,7 @@
         c.width = Math.round(sw * k); c.height = Math.round(sh * k);
         c.getContext('2d').drawImage(src, sx, sy, sw, sh, 0, 0, c.width, c.height);
         const r = await chrome.runtime.sendMessage({ type: 'translate', data: c.toDataURL('image/jpeg', 0.9).split(',')[1], mime: 'image/jpeg',
-          context: have.map((b) => b.text).join('\n'), glossary: window.__md.glossary, site: SITE, part: true, tag: o.tag });
+          context: have.map((b) => b.text).join('\n'), glossary: window.__md.glossary, site: series().key, seriesLabel: series().label, part: true, tag: o.tag });
         if (r.error || !r.bubbles?.length) return [];
         // crop % -> page %, then snap to the page's own pixels like any other box
         const mapped = r.bubbles.map((b) => ({ ...b, x: x + b.x * w / 100, y: y + b.y * h / 100, w: b.w * w / 100, h: b.h * h / 100, rec: true }));
@@ -352,7 +354,7 @@
       const port = chrome.runtime.connect({ name: portName });
       let stage = 'waiting'; // waiting -> draft -> final: a late draft must never overwrite the final
       const draft = new Promise((res) => { port.onMessage.addListener((m) => { if (m.type === 'draft') res(m.bubbles); }); });
-      const final = chrome.runtime.sendMessage({ type: 'translate', ...msg, context, glossary: window.__md.glossary, site: SITE, urgent, draftPort: portName })
+      const final = chrome.runtime.sendMessage({ type: 'translate', ...msg, context, glossary: window.__md.glossary, site: series().key, seriesLabel: series().label, urgent, draftPort: portName })
         .finally(() => { stage = 'final'; try { port.disconnect(); } catch { /* already gone */ } });
       draft.then((bubbles) => { // read pass done, polish still running: show the draft now
         if (stage !== 'waiting' || o.cancelled || !px || typeof fitBubbles !== 'function') return;

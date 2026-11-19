@@ -2,7 +2,7 @@
 // Everything that needs typing lives in the settings page (options.html), which opens in a tab and
 // survives focus changes - a popup closes and drops unsaved input as soon as you click elsewhere.
 const $ = (id) => document.getElementById(id);
-const POPUP_API = 6; // must equal API in background.js
+const POPUP_API = 7; // must equal API in background.js
 const NAMES = { gemini: 'Gemini', openrouter: 'OpenRouter', groq: 'Groq', anthropic: 'Claude', openai: 'OpenAI', custom: 'Tùy chỉnh' };
 
 const openSettings = (hash = '', site = '') => {
@@ -72,13 +72,16 @@ $('reload').onclick = () => chrome.runtime.reload();
     };
   }
 
-  // what the AI has learned about this site
-  const { mem } = await chrome.runtime.sendMessage({ type: 'mem', site: host }).catch(() => ({}));
+  // what the AI has learned about this series (series.js runs in the tab: it reads the page's own links)
+  const [{ result: ser } = {}] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: mdSeries }).catch(() => []);
+  const sk = ser?.key || host;
+  const { mem } = await chrome.runtime.sendMessage({ type: 'mem', site: sk }).catch(() => ({}));
   const pairs = (mem?.glossary || '').split('\n').filter((l) => l.trim()).length;
   const names = mem?.names?.length || 0;
   if (pairs || names) {
     $('mem').hidden = false;
-    $('mem-text').textContent = `AI đã nhớ ${pairs} cặp xưng hô, ${names} tên riêng của site này`;
-    $('mem-open').onclick = () => openSettings('#memory', host);
+    $('mem-text').textContent = `AI đã nhớ ${pairs} cặp xưng hô, ${names} tên riêng của ${ser?.label && sk !== host ? '“' + ser.label + '”' : 'site này'}`;
+    $('mem-text').title = $('mem-text').textContent;
+    $('mem-open').onclick = () => openSettings('#memory', sk);
   }
 })();
