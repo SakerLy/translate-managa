@@ -35,6 +35,8 @@
     .md-b.st-shout{line-height:1;font-weight:800;font-style:italic;letter-spacing:.5px}
     .md-b.st-narration{font-weight:500;font-style:italic}
     .md-b.st-vertical{writing-mode:vertical-rl}
+    .md-b.k-box{border-radius:2px}
+    .md-b.k-art{border-radius:40%/30%;box-shadow:0 0 6px 5px var(--md-bg,#fff)}
     .md-status{position:absolute;top:4px;left:4px;max-width:calc(100% - 24px);background:#000c;color:#fff;font:12px/1.4 sans-serif;padding:4px 8px;border-radius:4px;pointer-events:auto}
     .md-retry.ghost{background:#ffffff26}
     .md-retry{margin-left:6px;padding:2px 10px;border:0;border-radius:4px;background:#ff6740;color:#fff;font:600 12px sans-serif;cursor:pointer}`;
@@ -302,7 +304,10 @@
       const pageLh = lhs.length ? lhs[lhs.length >> 1] : 0;
       for (const t of separated) {
         const b = document.createElement('div');
-        b.className = 'md-b' + (t.style ? ' st-' + t.style : '');
+        // kind (from the model: bubble/box/art/sfx) decides the look: text drawn on the art gets a soft-edged
+        // patch in the art's own colour instead of a hard rectangle, captions keep square corners
+        b.className = 'md-b' + (t.style ? ' st-' + t.style : '') + (t.kind ? ' k-' + t.kind : '');
+        if (t.bg) b.style.setProperty('--md-bg', t.bg);
         b.dataset.style = t.style || '';
         // Line breaks chosen for THIS bubble's shape (a narrow bubble gets short, few-word lines),
         // then white-space:pre-line renders them verbatim - the fit below only scales the font.

@@ -42,8 +42,15 @@ STYLE (mục "style" của từng khối chữ, chỉ dùng đúng các giá tr�
 - "small": chữ nhỏ/thì thầm/chú thích cạnh nhân vật - "whisper": chữ mảnh nói khẽ.
 - "narration": khung dẫn truyện/TV/bản tin. "vertical": chữ dọc gốc Nhật. Thoại thường: bỏ trống style.
 
+KIND (mục "kind" - chữ nằm ở ĐÂU, quyết định cách chèn bản dịch; chỉ dùng đúng các giá trị này):
+- "bubble": trong bong bóng thoại hoặc bong bóng nghĩ (có viền bao quanh, nền trơn).
+- "box": trong khung chữ nhật (khung dẫn truyện, caption, bảng hiệu, màn hình).
+- "art": viết thẳng lên tranh hoặc nền đen/xám, KHÔNG có bong bóng hay khung (lời nghĩ trôi nổi, chữ nghiêng cạnh nhân vật, chữ trắng trên nền đen).
+- "sfx": từ tượng thanh vẽ tay.
+Với "art": box_2d phải bao TRỌN mọi dòng chữ, từ dòng ĐẦU tới dòng CUỐI và cả ký tự dài nhất - thà rộng hơn chữ một chút còn hơn hụt một dòng.
+
 VÍ DỤ (bong bóng có chữ nằm ở nửa trên bên trái, chiếm khoảng nửa chiều rộng ảnh):
-{"bubbles": [{"box_2d": [100, 50, 300, 500], "text": "Cậu định đi đâu vậy?", "style": ""}]}`;
+{"bubbles": [{"box_2d": [100, 50, 300, 500], "text": "Cậu định đi đâu vậy?", "style": "", "kind": "bubble"}]}`;
 // box_2d [ymin, xmin, ymax, xmax] on a 0-1000 scale is the box format Gemini is trained on (per Google's
 // image-understanding docs); free-form x/y/w/h percentages came back misplaced on a real page.
 const pageJob = (withSrc) => ({
@@ -57,13 +64,14 @@ const pageJob = (withSrc) => ({
       bubbles: {
         type: 'array',
         items: {
-          type: 'object', additionalProperties: false, required: ['box_2d', ...(withSrc ? ['src', 'who'] : []), 'text', 'sfx', 'style'], // OpenAI strict mode: every property must be listed
+          type: 'object', additionalProperties: false, required: ['box_2d', ...(withSrc ? ['src', 'who'] : []), 'text', 'sfx', 'style', 'kind'], // OpenAI strict mode: every property must be listed
           properties: {
             box_2d: { type: 'array', items: { type: 'number' } },
             ...(withSrc && { src: { type: 'string' }, who: { type: 'string' } }),
             text: { type: 'string' },
             sfx: { type: 'boolean' }, // true = onomatopoeia/SFX; filtered out when the user turns SFX off
             style: { type: 'string' }, // '' | big | small | shout | whisper | narration | vertical
+            kind: { type: 'string' }, // where the text sits: bubble | box | art | sfx - decides how it's covered and drawn
           },
         },
       },
@@ -347,12 +355,13 @@ function parseBubbles(text) {
   // A box over 25% of the page is never one speech bubble (largest on the test page is ~3.4%).
   const c = (v) => Math.min(1000, Math.max(0, v * x10)) / 10;
   const STYLES = new Set(['big', 'small', 'shout', 'whisper', 'narration', 'vertical']);
-  const parsed = bubbles.flatMap(({ box_2d: b, text: t, src, who, sfx, style }) => {
+  const KINDS = new Set(['bubble', 'box', 'art', 'sfx']);
+  const parsed = bubbles.flatMap(({ box_2d: b, text: t, src, who, sfx, style, kind }) => {
     if (!t?.trim() || !Array.isArray(b) || b.length !== 4 || !b.every((v) => Number.isFinite(v) && v >= -10 && v <= 1010)) return [];
     const [y0, x0, y1, x1] = [c(Math.min(b[0], b[2])), c(Math.min(b[1], b[3])), c(Math.max(b[0], b[2])), c(Math.max(b[1], b[3]))];
     const w = x1 - x0, h = y1 - y0;
     const st = STYLES.has(style) ? style : '';
-    return w > 0 && h > 0 && w * h <= 2500 ? [{ x: x0, y: y0, w, h, text: t.trim(), ...(src && { src }), ...(who && { who }), ...(sfx && { sfx: true }), ...(st && { style: st }) }] : [];
+    return w > 0 && h > 0 && w * h <= 2500 ? [{ x: x0, y: y0, w, h, text: t.trim(), ...(src && { src }), ...(who && { who }), ...(KINDS.has(kind) && { kind }), ...(sfx && { sfx: true }), ...(st && { style: st }) }] : [];
   });
   return mergeBubbles(parsed);
 }
@@ -516,7 +525,7 @@ function providerFor(id, base) {
 // Cache by image content + model: MangaDex recreates <img> tags for pages you go back to, and F5 reloads
 // them, so without this the same page is paid for again. Entries are ~1-2 KB; keep the newest CACHE_MAX.
 // Bump CACHE_V when the prompt changes, so results from the old prompt don't shadow the new ones.
-const CACHE_MAX = 500, CACHE_V = 10;
+const CACHE_MAX = 500, CACHE_V = 11;
 async function cacheKey(model, data) {
   const h = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(data)));
   return 'c:' + model + ':v' + CACHE_V + ':' + [...h.slice(0, 16)].map((b) => b.toString(16).padStart(2, '0')).join('');

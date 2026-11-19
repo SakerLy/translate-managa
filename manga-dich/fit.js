@@ -215,7 +215,19 @@ function fitBubbles(px, bubbles, anchor = true) {
       return { ...b, x, y, w: Math.min(100 - x, b.w + 2 * mx), h: Math.min(100 - y, b.h + 2 * my) };
     }
     let [x0, y0, x1, y1] = f.px;
-    const maxW = Math.min(W, Math.max(1.5 * (x1 - x0), x1 - x0 + 0.04 * W)), maxH = Math.min(H, Math.max(1.35 * (y1 - y0), y1 - y0 + 0.03 * H)); // open bubbles merge into white art: stay modest
+    if (f.b.kind === 'art') {
+      // Free text on the artwork (the model says so): there's no bubble interior to widen into. The model is
+      // asked to box EVERY line of such text, the letters found may miss a line in the art (live Sangeki
+      // run: "O LE ESTÁ" left above a white-on-black caption), so take both, plus about half a line of margin.
+      const [mx0, my0, mx1, my1] = boxes[k];
+      if ((mx1 - mx0) * (my1 - my0) <= 3 * (x1 - x0) * (y1 - y0)) { x0 = Math.min(x0, mx0); y0 = Math.min(y0, my0); x1 = Math.max(x1, mx1); y1 = Math.max(y1, my1); }
+      const line = Math.max(4, (f.lh || 1.5) / 100 * H * 1.25);
+      x0 = Math.max(0, Math.round(x0 - line * 0.5)); x1 = Math.min(W, Math.round(x1 + line * 0.5));
+      y0 = Math.max(0, Math.round(y0 - line * 0.6)); y1 = Math.min(H, Math.round(y1 + line * 0.6));
+      rects[k] = [x0, y0, x1, y1];
+      return { ...f.b, ...f.style, fit: f.fit, ...(f.lh && { lh: f.lh }), x: x0 / W * 100, y: y0 / H * 100, w: (x1 - x0) / W * 100, h: (y1 - y0) / H * 100 };
+    }
+    const maxW =Math.min(W, Math.max(1.5 * (x1 - x0), x1 - x0 + 0.04 * W)), maxH = Math.min(H, Math.max(1.35 * (y1 - y0), y1 - y0 + 0.03 * H)); // open bubbles merge into white art: stay modest
     const live = [true, true, true, true]; // top, right, bottom, left
     for (let guard = 0; live.some(Boolean) && guard < 400; guard++) {
       if (live[0]) live[0] = y0 > 0 && y1 - y0 < maxH && lineBg(f.bg, x0, y0 - 1, x1, y0) >= 0.96 && clear(k, x0, y0 - 1, x1, y1) && !!y0--;
