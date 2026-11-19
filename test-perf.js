@@ -52,5 +52,5 @@ store.provider = 'openrouter'; store.keys = { openrouter: 'k' }; store.models = 
   console.log(`tổng lệnh gọi API: page=${nPage}, polish=${nPolish}`);
   assert.ok(draftMs !== null && draftMs < DELAY.page + 800, 'draft arrives after the read pass only');
   assert.ok(finalMs2 >= DELAY.page + DELAY.polish - 500, 'final result waits for polish');
-  console.log('OK — bản nháp tới trước bản cuối đúng như thiết kế');
+  console.log('OK - bản nháp tới trước bản cuối đúng như thiết kế');
 })();

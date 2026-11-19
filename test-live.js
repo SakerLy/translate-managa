@@ -62,7 +62,7 @@ if (require.main === module) (async () => {
         bubbles = ctx.parseBubbles(await P.translate(key, model, page, 'Đây là trang đầu tiên.'));
       } catch (e) { console.log(`  ✗ ${model}: ${e.message}`); continue; }
       const secs = ((Date.now() - t0) / 1000).toFixed(1);
-      console.log(`  ${model} (${secs}s) — ${bubbles.length} bong bóng`);
+      console.log(`  ${model} (${secs}s) - ${bubbles.length} bong bóng`);
       for (const b of bubbles) console.log(`     [x${Math.round(b.x)} y${Math.round(b.y)} w${Math.round(b.w)} h${Math.round(b.h)}] ${b.text}`);
       const out = path.join(path.dirname(img), `result-${provider}-${model.replace(/[^\w.-]/g, '_')}.json`);
       fs.writeFileSync(out, JSON.stringify({ model, secs, bubbles }, null, 2));

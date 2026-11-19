@@ -1,4 +1,4 @@
-// Run: node test-background.js  — loads background.js with fake chrome/fetch and checks model lists + parsing.
+// Run: node test-background.js  - loads background.js with fake chrome/fetch and checks model lists + parsing.
 const fs = require('fs'), vm = require('vm'), assert = require('assert');
 
 let replies = {}, store = {}, listener, fetches = 0;
@@ -68,7 +68,7 @@ const call = (msg) => new Promise((res) => listener(msg, null, res));
     assert.equal(seen.length, n, 'rejected URLs are never fetched');
 
     // a real gateway's model list (OpenAI shape, no `created`): every provider family
-    // must list all of it — before, OpenAI kept only gpt-*, Anthropic returned [], Gemini threw
+    // must list all of it - before, OpenAI kept only gpt-*, Anthropic returned [], Gemini threw
     const gw = JSON.parse(fs.readFileSync(__dirname + '/test-fixtures/gateway-models.json', 'utf8'));
     const want = gw.data.map((m) => m.id);
     const auth = {};
@@ -218,7 +218,7 @@ const call = (msg) => new Promise((res) => listener(msg, null, res));
     assert.equal(b.length, 1); assert.equal(b[0].text, 'Định đi đâu?', 'parenthesised lines parse');
     const c = parse('[16, 60, 130, 340] Đi đâu vậy?');
     assert.equal(c.length, 1); assert.equal(c[0].text, 'Đi đâu vậy?', 'bare lines parse');
-    // a gateway error in prose must NOT parse as bubbles — the queue must see the failure
+    // a gateway error in prose must NOT parse as bubbles - the queue must see the failure
     let threw = false;
     try { parse('số dư không đủ, vui lòng nạp thêm'); } catch { threw = true; }
     assert.ok(threw, 'prose error still throws');
@@ -228,7 +228,7 @@ const call = (msg) => new Promise((res) => listener(msg, null, res));
   }
 
   // polish: some models answer with the bare lines array despite the schema (glm-4.6v live run);
-  // take it — the glossary falls back to the old one, which is the correct behaviour anyway
+  // take it - the glossary falls back to the old one, which is the correct behaviour anyway
   {
     const pol = vm.runInContext('polish', ctx);
     const draft = [{ x: 1, y: 2, w: 3, h: 4, src: 'どこへ行くの？', text: 'Bạn đi đâu?' }];
@@ -277,7 +277,7 @@ const call = (msg) => new Promise((res) => listener(msg, null, res));
   ctx.fetch = keepFetch;
   assert.equal(q1.bubbles?.[0]?.text, 'X', 'flaky answer retried invisibly');
   assert.equal(q2.bubbles?.[0]?.text, 'X', 'twin request rides the same job');
-  assert.equal(qn, 3, 'one failed page call + its retry + one polish — fetched once for both callers');
+  assert.equal(qn, 3, 'one failed page call + its retry + one polish - fetched once for both callers');
   const q3 = await call({ type: 'translate', data: 'EE', mime: 'image/jpeg' });
   assert.equal(q3.bubbles[0].text, 'X');
   assert.equal(qn, 3, 'a third request is served from the cache');
@@ -293,6 +293,30 @@ const call = (msg) => new Promise((res) => listener(msg, null, res));
   assert.match((await call({ type: 'translate', data: 'AA', mime: 'image/jpeg' })).error, /Không kết nối được/);
   ctx.fetch = realFetch;
   clearTimeout(keepAlive);
+  // ---- SFX toggle: the model tags "sfx": true; sfx=false drops those bubbles before draft/polish/cache
+  {
+    let calls = 0, lastBody = null;
+    ctx.fetch = async (url, init) => {
+      lastBody = JSON.parse(init.body);
+      const isPolish = !lastBody.messages?.[1]?.content?.some?.((c) => c.type === 'image_url');
+      if (isPolish) return { ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify({ lines: JSON.parse(lastBody.messages[1].content[0].text.match(/\[([\s\S]*)\]/)[1]).map(() => 'ok'), glossary: '' }) } }] }) };
+      calls++;
+      return { ok: true, json: async () => ({ choices: [{ message: { content: '{"bubbles":[{"box_2d":[100,100,300,300],"text":"Cậu đi đâu?"},{"box_2d":[500,100,700,300],"text":"RẦM!","sfx":true}]}' } }] }) };
+    };
+    store = { provider: 'openai', keys: { openai: 'k' }, models: { openai: 'gpt-x' }, polish: false, sfx: true };
+    const on = await call({ type: 'translate', data: 'SFX-ON', mime: 'image/jpeg' });
+    assert.equal(on.bubbles.length, 2, 'sfx on: dialogue + SFX');
+    assert.equal(on.bubbles[1].sfx, true, 'sfx flag survives parsing');
+    store = { provider: 'openai', keys: { openai: 'k' }, models: { openai: 'gpt-x' }, polish: false, sfx: false };
+    const off = await call({ type: 'translate', data: 'SFX-OFF', mime: 'image/jpeg' });
+    assert.equal(off.bubbles.length, 1, 'sfx off: SFX bubble dropped');
+    assert.equal(off.bubbles[0].text, 'Cậu đi đâu?', 'dialogue kept');
+    assert.equal(calls, 2, 'one page call per setting (different cache keys)');
+    // the schema must ask for the sfx flag (otherwise no model would ever return it)
+    assert.ok(lastBody.response_format.json_schema.schema.properties.bubbles.items.properties.sfx, 'schema carries sfx flag');
+    store = {};
+  }
+
   console.log('OK');
   done = true;
 })();

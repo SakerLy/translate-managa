@@ -127,6 +127,7 @@ $('reload').onclick = () => chrome.runtime.reload(); // restarts the worker with
   $('textOnly').checked = st.textOnly ?? true;
   $('provider').value = st.provider || 'gemini';
   showProvider(prov());
+  refreshMem(); // trí nhớ AI của site đang mở
   if (!st.models[prov()] && (st.keys[prov()] || st.bases[prov()])) findModels();
 })();
 
@@ -154,10 +155,39 @@ $('save').onclick = async () => {
   findModels();
 };
 
-$('polish').onchange = () => chrome.storage.local.set({ polish: $('polish').checked });
+$('polish').onchange = async () => {
+  await chrome.storage.local.set({ polish: $('polish').checked });
+  refreshMem(); // polish off = không còn học thêm: cập nhật view luôn
+};
 // sfx/textOnly flip live: content.js listens to storage.onChanged and re-renders without new calls
 $('sfx').onchange = () => chrome.storage.local.set({ sfx: $('sfx').checked });
 $('textOnly').onchange = () => chrome.storage.local.set({ textOnly: $('textOnly').checked });
+
+// ---- AI memory viewer: xem AI đã học gì về site đang mở (xưng hô, tên riêng) ----
+async function currentSite() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  return new URL(tab.url).hostname.replace(/^www\./, '');
+}
+async function refreshMem() {
+  try {
+    const site = await currentSite();
+    const { mem } = await send({ type: 'mem', site });
+    const el = $('memview');
+    const lines = [];
+    if (mem?.glossary) lines.push('Xưng hô:\n' + mem.glossary);
+    if (mem?.names?.length) lines.push('Tên riêng không dịch: ' + mem.names.join(', '));
+    if (mem?.notes?.length) lines.push('Ghi chú văn phong:\n' + mem.notes.join('\n'));
+    el.textContent = lines.length ? `[${site}]\n` + lines.join('\n\n') : `[${site}] Chưa học được gì - dịch vài trang trước nhé.`;
+  } catch { $('memview').textContent = 'Mở popup trên tab truyện để xem trí nhớ của site đó.'; }
+}
+$('memreset').onclick = async () => {
+  try {
+    const site = await currentSite();
+    await send({ type: 'mem-reset', site });
+    await refreshMem();
+    msg(`Đã xoá trí nhớ của ${site}`, 'ok');
+  } catch (e) { msg('Không xoá được: ' + e.message, 'err'); }
+};
 
 $('model').onchange = async () => {
   const p = prov(), picked = $('model').value.trim();

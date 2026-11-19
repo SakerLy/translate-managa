@@ -5,7 +5,7 @@
 
 // Wraps `text` into 1..maxLines lines. A bubble needs few, WIDE lines; a narrow one few, TALL lines:
 // `ar` is the bubble's width/height ratio. Tries every line count and picks the arrangement whose
-// line aspect (widest line / count) is closest to the bubble's — so a "2 words per line" look falls
+// line aspect (widest line / count) is closest to the bubble's - so a "2 words per line" look falls
 // out of the bubble's own shape instead of a fixed rule that fights it. Long words are never split;
 // punctuation keeps Vietnamese semantics (break at spaces, not inside a word).
 // eslint-disable-next-line no-unused-vars
@@ -53,8 +53,8 @@ function wrapText(text, ar, maxLines = 6) {
 // Textless-page detector, BEFORE any API call: letter-sized ink clusters are counted on a
 // downsampled grayscale of the page. Manga lettering is small, dense and sparse on the page
 // (art strokes/screentone are either huge or everywhere); a text page carries many small clusters,
-// a textless one carries ~none. Returns { ratio, has } — ratio = small clusters / all clusters.
-//   px: { width, height, data } RGBA — any resolution (samples every 4th pixel; W*H ≈ 300k is fine)
+// a textless one carries ~none. Returns { ratio, has } - ratio = small clusters / all clusters.
+//   px: { width, height, data } RGBA - any resolution (samples every 4th pixel; W*H ≈ 300k is fine)
 // Thresholds tuned on the synth suite: text pages 0.36+, textless (art/screentone/noise) ≤ 0.07.
 // eslint-disable-next-line no-unused-vars
 function hasText(px) {
@@ -68,7 +68,7 @@ function hasText(px) {
   }
   // A page's dominant tone is its "paper": white paper, toned art or a night page all keep most of
   // the grid near the paper level (letters are a small share of pixels). The 75th-brightest
-  // percentile is that level — robust where a plain mean fails (a full-bleed screentone drags the
+  // percentile is that level - robust where a plain mean fails (a full-bleed screentone drags the
   // mean down until letters stop clearing the ink threshold).
   const sorted = Float32Array.from(g).sort();
   const paper = sorted[(sorted.length * 0.75) | 0];
@@ -108,14 +108,14 @@ function hasText(px) {
     total++;
     // Text blobs are letter-shaped, i.e. two-dimensional: a JPEG shard or a speedline fragment is
     // a thin 1-2 cell strip (measured on the JPEG test pages: 9x2, 10x2), while a glyph has real
-    // extent on BOTH axes (6x7, 8x8). They are also DENSE in their box — bold strokes, fill
-    // 0.35-0.95 — where tone dust and hollow art fragments sit at 0.05-0.25. Size band does the rest.
+    // extent on BOTH axes (6x7, 8x8). They are also DENSE in their box - bold strokes, fill
+    // 0.35-0.95 - where tone dust and hollow art fragments sit at 0.05-0.25. Size band does the rest.
     const bw = x1 - x0 + 1, bh = y1 - y0 + 1, fillRatio = n / (bw * bh);
     if (n >= SMIN && n <= SMAX && bw >= 3 && bh >= 3 && bw <= LMAX * 4 && bh <= LMAX * 4 && fillRatio >= 0.35 && fillRatio <= 0.95) small++;
   }
   // Absolute count, not a share: tone dust makes thousands of tiny blobs (each below SMIN) that
   // would drown a ratio. A real text page keeps ≥8 dense letter-band blobs even when nearby tone
-  // merges some; a lone SFX or page number is skipped — the "Vẫn dịch" button covers rare misses.
+  // merges some; a lone SFX or page number is skipped - the "Vẫn dịch" button covers rare misses.
   const has = small >= 8;
   return { ratio: total ? small / total : 0, small, total, has };
 }

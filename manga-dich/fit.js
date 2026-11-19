@@ -28,8 +28,8 @@ function fitBubbles(px, bubbles) {
   const boxes = bubbles.map(toPx);
   const centres = boxes.map(([x0, y0, x1, y1]) => [(x0 + x1) / 2, (y0 + y1) / 2]);
   // A letter belongs to the bubble whose box owns its centre (seen in a real run: growth crossed
-  // into the neighbouring bubble's text). When two model boxes overlap — both aimed at the same
-  // bubble after a merge miss — the NEARER box wins, so the duplicate can't grow on the same ink
+  // into the neighbouring bubble's text). When two model boxes overlap - both aimed at the same
+  // bubble after a merge miss - the NEARER box wins, so the duplicate can't grow on the same ink
   // and stays visibly empty instead of covering the twin's translation.
   const othersOwn = (me, cx, cy) => boxes.some((o, j) => j !== me && cx >= o[0] && cx < o[2] && cy >= o[1] && cy < o[3]
     && (Math.hypot(cx - centres[j][0], cy - centres[j][1]) <= Math.hypot(cx - centres[me][0], cy - centres[me][1])));
@@ -89,7 +89,7 @@ function fitBubbles(px, bubbles) {
 
     // A box over 8% of the page is already a model mistake (largest real bubble on the test page: 3.4%):
     // growing it would follow hair/screentone into the art. Try to shrink it to the text cluster inside
-    // instead — the model aims its centre at the text even when the box is way too big — and keep the
+    // instead - the model aims its centre at the text even when the box is way too big - and keep the
     // model's box only if no plausible cluster is found.
     const shrink = () => {
       const mx = Math.round((bx1 - bx0) * 0.8), my = Math.round((by1 - by0) * 0.8);

@@ -20,9 +20,12 @@
 
 <img src="docs/popup.png" alt="Popup của Manga Dịch" width="300" align="right">
 
-- **Dịch đúng chỗ.** Mỗi câu dịch nằm trên bong bóng của nó. Extension đọc điểm ảnh của trang để nới ô dịch phủ hết chữ gốc và lấy đúng màu nền của khung (khung tối thì chữ trắng). Bấm vào ô để xem lại chữ gốc.
-- **Văn phong tự nhiên.** Phân biệt lời nói, lời nghĩ thầm, lời dẫn truyện. Giữ tên riêng và -san/-kun.
+- **Dịch đúng chỗ.** Mỗi câu dịch nằm trên bong bóng của nó. Extension đọc điểm ảnh của trang để nới ô dịch phủ hết chữ gốc và lấy đúng màu nền của khung (khung tối thì chữ trắng). Ô trùng nhau được tự gộp (`mergeBubbles`), ô chồng nhau được tự tách (`separate`), nên các ô không bao giờ đè lên nhau. Bấm vào ô để xem lại chữ gốc.
+- **Chữ to nhỏ theo ngữ cảnh.** Model gắn nhãn từng khối chữ: chữ gào (`shout`, to đậm nghiêng), chữ thì thầm (`whisper`, mảnh nhỏ), chú thích (`small`), khung dẫn truyện (`narration`, nghiêng), chữ dọc (`vertical`); cỡ chữ được nới trần/đáy theo nhãn.
+- **Văn phong tự nhiên.** Phân biệt lời nói, lời nghĩ thầm, lời dẫn truyện. Giữ tên riêng và -san/-kun. Không dịch word-by-word: chào hỏi, cảm thán, câu đùa được viết lại bằng cách nói tự nhiên của tiếng Việt.
 - **Xưng hô nhất quán.** Bảng xưng hô (ví dụ "Iori ↔ bạn gái: cậu/tớ") được ghi lại ngay từ trang đầu và áp dụng cho mọi trang sau trong tab.
+- **AI học qua từng lần dịch.** Bảng xưng hô và tên riêng của từng site được lưu bền vững (`mem:<site>` trong chrome.storage): tắt trình duyệt, đổi chapter, xưng hô và tên riêng vẫn đúng như chapter trước. Xem/xoá được trong popup ("AI đã học về site này").
+- **Chịu lỗi quota của cổng trung gian.** Gặp "reset after 1m 50s" kiểu gatecheap, extension ngủ đúng thời gian đếm ngược rồi tự gọi lại trong cùng lượt - trang vẫn tự dịch xong thay vì đỏ lỗi Thử lại.
 - **Trau chuốt văn phong** *(tắt được)*. Lượt gọi thứ hai chỉ gửi chữ, viết lại cho trơn tru và đối chiếu chữ gốc để không sai nghĩa.
 - **Tự dịch khi bạn đọc.** Trang đang xem được dịch trước, rồi tới 2 trang kế tiếp. Lật hay cuộn tới đâu dịch tới đó, ở cả chế độ đọc từng trang, cuộn dọc và cuộn ngang.
 - **Nút Thử lại** ngay trên trang bị lỗi hoặc quá thời gian.
@@ -108,7 +111,7 @@ Chỉ chấp nhận địa chỉ `http://` hoặc `https://`. API key được g
 
 Model mạnh hơn thì bước trau chuốt văn phong cũng làm tốt hơn, nhưng chậm hơn.
 
-**Bản 0.2** — đo lại trên trang test tổng hợp 14 bong bóng (8 dạng: thoại, nghĩ thầm, nền tối, caption, chữ dọc, SFX, chữ nhỏ, 2 bong bóng sát nhau) qua 3 model thị giác, mỗi model chạy lặp 3–5 lần:
+**Bản 0.2** - đo lại trên trang test tổng hợp 14 bong bóng (8 dạng: thoại, nghĩ thầm, nền tối, caption, chữ dọc, SFX, chữ nhỏ, 2 bong bóng sát nhau) qua 3 model thị giác, mỗi model chạy lặp 3–5 lần:
 
 | Model | Ngày 0.2: trúng/dđúng chỗ (ô thô) | Sau khi khớp ô theo điểm ảnh |
 |---|---|---|
@@ -212,11 +215,12 @@ Chỉ dịch khi SFX ngắn và có nghĩa với cảnh. Ảnh hiển thị nh�
 ```
 manga-dich/                 thư mục extension (Load unpacked thư mục này)
 ├── manifest.json           Manifest V3
-├── background.js           Gọi API các nhà cung cấp (theo Base URL), trau chuốt, bảng xưng hô, bộ nhớ đệm, gọi thử model
-├── content.js              Chọn trang cần dịch, mã hóa ảnh, vẽ lớp bản dịch, nút Thử lại
+├── background.js           Gọi API các nhà cung cấp (theo Base URL), gộp ô trùng (mergeBubbles), trau chuốt, bảng xưng hô + trí nhớ theo site, ngủ theo đếm ngược quota, bộ nhớ đệm, gọi thử model
+├── content.js              Chọn trang cần dịch, mã hóa ảnh, tách ô chồng nhau (separate), vẽ lớp bản dịch theo nhãn style, nút Thử lại
 ├── fit.js                  Khớp ô dịch vào bong bóng theo điểm ảnh, lấy màu nền
-└── popup.html / popup.js   Cài đặt: nhà cung cấp, key, Base URL, model, trau chuốt (có chế độ tối)
+└── popup.html / popup.js   Cài đặt: nhà cung cấp, key, Base URL, model, trau chuốt, xem/xoá trí nhớ AI theo site (có chế độ tối)
 test-background.js          Test unit (không gọi mạng)
+test-v04.js                 Test unit tính năng v0.4: mergeBubbles, nhãn style, ngủ theo quota, trí nhớ theo site, separate()
 test-fit.js                 Đo fit.js trên điểm ảnh thật: chữ gốc được che, phần lấn ra tranh
 test-live.js                Test thật: dịch 1 trang, chấm vị trí ô dịch theo đáp án
 test-ab.js                  Test thật chạy lặp N lần một model để so sánh prompt (A/B)

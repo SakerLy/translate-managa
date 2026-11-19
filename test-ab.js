@@ -1,5 +1,5 @@
 // So sánh prompt (A/B) trên trang test có đáp án: chạy một model N lần, chấm recall/precision từng lần
-// rồi báo trung bình — một lần chạy duy nhất là không đủ kết luận vì model trả về hơi khác nhau mỗi lần.
+// rồi báo trung bình - một lần chạy duy nhất là không đủ kết luận vì model trả về hơi khác nhau mỗi lần.
 //   node test-ab.js <model> [số lần chạy, mặc định 3]
 //   BG=path/variant.js để chạy một biến thể background.js (mặc định: manga-dich/background.js)
 //   PROVIDER=custom|gemini|... KEY_ENV=CUSTOM_API_KEY (mặc định theo provider, đọc từ .env)
@@ -43,9 +43,9 @@ const call = (msg) => new Promise((res) => listener(msg, null, res));
     try {
       const bubbles = ctx.parseBubbles(await P.translate(key, model, page, 'Đây là trang đầu tiên.'));
       const s = score(bubbles);
-      return `  lần ${i + 1}: ${((Date.now() - t0) / 1000).toFixed(0)}s — trúng ${Math.round(s.recall * 100)}%, đúng chỗ ${Math.round(s.precision * 100)}% (${bubbles.length} ô) ${s.pass ? 'ĐẠT' : 'không đạt'}`;
+      return `  lần ${i + 1}: ${((Date.now() - t0) / 1000).toFixed(0)}s - trúng ${Math.round(s.recall * 100)}%, đúng chỗ ${Math.round(s.precision * 100)}% (${bubbles.length} ô) ${s.pass ? 'ĐẠT' : 'không đạt'}`;
     } catch (e) {
-      return `  lần ${i + 1}: LỖI ${((Date.now() - t0) / 1000).toFixed(0)}s — ${String(e.message).split('\n')[0].slice(0, 100)}`;
+      return `  lần ${i + 1}: LỖI ${((Date.now() - t0) / 1000).toFixed(0)}s - ${String(e.message).split('\n')[0].slice(0, 100)}`;
     }
   };
   const label = `${path.basename(process.env.BG || 'manga-dich/background.js')} × ${model} × ${N} lần`;

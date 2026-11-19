@@ -1,7 +1,7 @@
 // Raw fetch instead of provider SDKs: a plain MV3 extension has no bundler step.
 // Format rules ride at the TOP of the system prompt and the worked example spells out the full JSON
-// object. Measured on a truth-scored page (glm-4.6v via gateway, 3 runs each): the old prompt —
-// style first, geometry appended as one long sentence, example described but not shown — parsed
+// object. Measured on a truth-scored page (glm-4.6v via gateway, 3 runs each): the old prompt -
+// style first, geometry appended as one long sentence, example described but not shown - parsed
 // only 1/3 runs (the other 2 came back as made-up plain-text "[box] text" lines); this version
 // parsed 3/3 with recall 95% / precision 97%. Style rules stay out of the geometry block.
 const SYSTEM = `Bạn là dịch giả truyện tranh (manga/manhwa/manhua) chuyên nghiệp sang tiếng Việt.
@@ -9,34 +9,44 @@ Nhiệm vụ: nhìn trang truyện, tìm MỌI khối chữ, rồi dịch sang t
 
 QUY TẮC ĐỊNH DẠNG (bắt buộc):
 - Trả về DUY NHẤT một khối JSON hợp lệ, không thêm chữ nào trước/sau:
-{"bubbles": [{"box_2d": [ymin, xmin, ymax, xmax], "text": "bản dịch"}]}
+{"bubbles": [{"box_2d": [ymin, xmin, ymax, xmax], "text": "bản dịch", "style": "hint"}]}
 - box_2d = 4 số nguyên 0-1000 theo khung ảnh: (0,0) là góc trên trái, 1000 là mép dưới/phải; ymin/ymax tính từ mép trên, xmin/xmax tính từ mép trái.
 - KHÔNG trả plain-text, KHÔNG markdown, KHÔNG giải thích. Chỉ JSON.
 
 QUY TẮC DÒ TRANG:
 - Dò hết trang theo từng khung truyện (từ khung trên xuống khung dưới), liệt kê MỌI khối chữ: bong bóng thoại, chữ nghĩ thầm (bong bóng mây), khung dẫn truyện, chữ viết tay nhỏ cạnh nhân vật, SFX.
-- Mỗi khối chữ MỘT ô riêng ôm sát chữ — không ôm cả khung truyện, không tràn sang vùng chữ khác, hai ô không chồng nhau.
+- Mỗi khối chữ MỘT ô riêng ôm sát chữ - không ôm cả khung truyện, không tràn sang vùng chữ khác, hai ô không chồng nhau.
 - Chữ dọc kiểu Nhật: đọc cột từ phải sang trái, mỗi cột từ trên xuống; một ô bao cả cụm chữ dọc đó.
+- KHÔNG BỎ SÓT: dòng thoại nhỏ sát mép trang/góc trang, chữ dọc hai bên, caption dưới khung, chữ trên bảng/biển hiệu. Câu hỏi "còn khối chữ nào chưa có ô chưa" - trả lời phải là KHÔNG trước khi trả JSON.
 - SFX (từ tượng thanh): chỉ dịch khi ngắn, có ý nghĩa với cảnh; SFX dài hoặc chỉ là trang trí thì bỏ qua.
 - Chữ bị che khuất/nhòe: dịch phần đọc được, không đoán mò.
 
-QUY TẮC DỊCH:
-- Văn nói tự nhiên, đúng giọng và tính cách nhân vật; không dịch từng chữ.
+QUY TẮC DỊCH (học theo cách biên tập viên Việt làm):
+- Dịch THEO NGHĨA CẢ CÂU, không dịch từng chữ. "よろしくお願いします" giữa hai bạn = "Rất mong cậu giúp đỡ nhé!", không phải "Xin hãy chiếu cố tôi"; "お疲れ" = "Vất vả rồi!"; "ただいま" = "Tôi về đây!"; "いってきます" = "Đi nhé!".
+- Câu đùa/chơi chữ: hiểu ý đồ gây cười, viết lại bằng cách nói gây cười TƯƠNG ĐƯƠNG của tiếng Việt; giữ cái cười thay vì giữ từng từ.
+- Cảm thán ngắn: "えっ"="Hả?", "うそ"="Xạo!", "なるほど"="Ra thế…", "やばい"="Chết tiệt!"/"Khủng khiếp!" tùy cảnh.
+- Văn nói tự nhiên, đúng giọng và tính cách nhân vật; con đường phố chửi "この野郎" = "Đm mày!" khi hợp bối cảnh, không nuốt tròn.
 - Xưng hô theo quan hệ và bối cảnh: bạn bè (tao/mày, tớ/cậu), người lạ/lịch sự (tôi/anh, tôi/cô), gia đình, cấp trên; truyện cổ trang/tu tiên dùng ta/ngươi, tại hạ, sư huynh...
-- Giữ tên riêng; truyện Nhật giữ hậu tố -san, -kun, -chan, senpai.
+- TÊN RIÊNG KHÔNG DỊCH: tên nhân vật, địa danh (Shibuya, Shinjuku), tên trường/nhóm/hãng. Chữ Hán tên riêng giữ cách đọc phổ biến (Ling Yu, không dịch nghĩa). Giữ hậu tố -san, -kun, -chan, senpai.
+- Danh xưng anh/chị/em theo TUỔI và QUAN HỆ thấy trong tranh; không rõ thì giữ cách gọi trung tính.
 - Câu ngắn gọn để vừa bong bóng. Giữ cảm thán, ngập ngừng ("...", "!?").
 - Lời nghĩ thầm đặt trong ngoặc đơn (...) nếu bản gốc có; khung dẫn truyện/bản tin giữ văn kể gọn.
 - Bỏ qua watermark, chữ ký nhóm dịch, số trang.
 
+STYLE (mục "style" của từng khối chữ, chỉ dùng đúng các giá trị này):
+- "big": chữ to (khóc gào, thét) - "shout": chữ in đậm góc cạnh đang gào - hai cái này khác nhau.
+- "small": chữ nhỏ/thì thầm/chú thích cạnh nhân vật - "whisper": chữ mảnh nói khẽ.
+- "narration": khung dẫn truyện/TV/bản tin. "vertical": chữ dọc gốc Nhật. Thoại thường: bỏ trống style.
+
 VÍ DỤ (bong bóng có chữ nằm ở nửa trên bên trái, chiếm khoảng nửa chiều rộng ảnh):
-{"bubbles": [{"box_2d": [100, 50, 300, 500], "text": "Cậu định đi đâu vậy?"}]}`;
+{"bubbles": [{"box_2d": [100, 50, 300, 500], "text": "Cậu định đi đâu vậy?", "style": ""}]}`;
 // box_2d [ymin, xmin, ymax, xmax] on a 0-1000 scale is the box format Gemini is trained on (per Google's
 // image-understanding docs); free-form x/y/w/h percentages came back misplaced on a real page.
 const pageJob = (withSrc) => ({
   name: 'bubbles',
   // src (the original text) is only needed by polish(); it costs ~500 output tokens a page, so skip it otherwise
   system: SYSTEM + ' ' + (withSrc ? 'Mỗi mục thêm "src": chữ gốc đúng như trong ảnh (bên cạnh "text" là bản dịch).' : '')
-    + ' Đánh dấu "sfx": true cho MỌI mục là từ tượng thanh (SFX) — kể cả SFX dài/trang trí.',
+    + ' Đánh dấu "sfx": true cho MỌI mục là từ tượng thanh (SFX) - kể cả SFX dài/trang trí.',
   schema: {
     type: 'object', additionalProperties: false, required: ['bubbles'],
     properties: {
@@ -49,6 +59,7 @@ const pageJob = (withSrc) => ({
             ...(withSrc && { src: { type: 'string' } }),
             text: { type: 'string' },
             sfx: { type: 'boolean' }, // true = onomatopoeia/SFX; filtered out when the user turns SFX off
+            style: { type: 'string' }, // '' | big | small | shout | whisper | narration | vertical
           },
         },
       },
@@ -68,6 +79,11 @@ Giữ nghĩa là bắt buộc, văn hay là thứ hai:
 - Giữ người nói của draft. Xưng hô giữa cùng hai người phải thống nhất cả trang: nếu draft lẫn lộn (lúc cậu/tớ lúc anh/em) thì chọn một cặp hợp nhất và sửa mọi câu theo cặp đó.
 - BẢNG XƯNG HÔ (nếu được đưa) là quyết định của các trang trước: cặp nào đã có trong bảng thì BẮT BUỘC dùng đúng cặp đó, kể cả khi draft dùng cặp khác. Không đổi cặp đã có.
 - Trả về "glossary": bảng xưng hô sau trang này = bảng cũ + cặp mới gặp ở trang này, mỗi dòng một cặp, ghi CẢ HAI CHIỀU dạng "A ↔ B: A xưng X gọi B là Y; B xưng Y gọi A là X" (dùng tên hoặc mô tả ngắn: "Iori", "bạn gái của Iori", "người dẫn chương trình"). Sửa mọi câu của cả A và B theo đúng chiều của người nói. Không có gì mới thì trả lại bảng cũ.
+- DỊCH TỰ NHIÊN, KHÔNG WORD-BY-WORD (quan trọng):
+  + Chào: "よろしくお願いします" (bạn bè) → "Rất mong cậu giúp đỡ nhé!"; (công sở) → "Rất mong anh/chị chỉ giáo."; "お疲れ様" → "Vất vả rồi!"; "ただいま" → "Tôi về đây!"; "いってらっしゃい" → "Đi cẩn thận nhé!".
+  + Cảm thán: "えっ" → "Hả?"; "うそ！" → "Xạo!"; "なるほど" → "Ra thế…"; "やばい" → "Chết tiệt!" / "Khủng khiếp!".
+  + Câu đùa: giữ ý đồ gây cười, đổi cách nói cho vui kiểu Việt; KHÔNG dịch word-by-word.
+  + Thành ngữ: đổi sang thành ngữ Việt tương đương ("泣きっ面に蜂" → "Vận xui chưa đủ còn thêm hoạ").
 - Draft đã đúng và tự nhiên thì giữ nguyên.
 - Bản tin TV/radio, thông báo, khung dẫn truyện giữ giọng trang trọng, không thêm "đấy/nhé".
 Cách viết:
@@ -82,6 +98,7 @@ Ví dụ cứng → tự nhiên:
 "Điều đó là không thể nào!" → "Làm gì có chuyện đó!"
 "Nếu bạn không phiền, tôi sẽ giúp bạn như một lời cảm ơn." → "Không phiền thì để tớ giúp, coi như trả ơn nhé."
 "Có vẻ như anh ấy đã quên mất cuộc hẹn của chúng tôi." (nghĩ thầm) → "Chắc lại quên béng vụ hẹn rồi..."
+"Yoroshiku onegaishimasu" (hai bạn mới quen) → "Từ giờ mong cậu chỉ bảo nhiều nhé!"
 Trả về DUY NHẤT một khối JSON, không thêm chữ nào trước/sau:
 {"lines": ["câu đã viết lại 1", "câu đã viết lại 2"], "glossary": "bảng xưng hô sau trang này"}
 "lines" phải đủ đúng số mục nhận được, cùng thứ tự. Không có cặp xưng hô mới thì "glossary" = bảng cũ nguyên văn.`;
@@ -104,7 +121,7 @@ async function polish(provider, key, model, bubbles, context, glossary = '') {
     const raw = await P.translate(key, model, null, prompt, undefined, POLISH_JOB);
     let out = JSON.parse(raw.replace(/^\s*```(?:json)?|```\s*$/g, ''));
     // some models answer with the bare lines array despite the schema (seen live: glm-4.6v returned
-    // ["Cậu đi đâu đấy?", "Ừ!"] — polish then silently kept every draft). Take it: the glossary
+    // ["Cậu đi đâu đấy?", "Ừ!"] - polish then silently kept every draft). Take it: the glossary
     // just stays the old one, which is the correct fallback anyway.
     if (Array.isArray(out)) out = { lines: out, glossary: '' };
     const g = typeof out.glossary === 'string' && out.glossary.trim() ? out.glossary.trim().slice(0, 1500) : glossary; // cap: it rides in every later prompt
@@ -132,18 +149,35 @@ async function fetchImage(url) {
 
 const TIMEOUT_S = 150; // a hung or very slow model must surface as an error, not an endless "Đang dịch…"
 
+// gatecheap-style gateways answer 503/403 with a per-provider quota countdown ("reset after 1m 50s").
+// Sleeping through it INSIDE the same call beats burning the queue's 3 fast retries: the page still
+// translates on its own instead of ending at "Thử lại". Two sleeps max, ≤5 min each, then give up.
+const RESET_IN = /reset after (?:(\d+)m)?\s*(?:(\d+)(?:\s*s)?)?/;
+function resetSeconds(msg) {
+  const m = RESET_IN.exec(String(msg));
+  if (!m) return 0;
+  const s = (+(m[1] || 0)) * 60 + (+(m[2] || 0));
+  return s > 0 && s <= 300 ? s : 0;
+}
+
 async function api(url, init) {
   const secs = init.timeoutS ?? TIMEOUT_S;
-  let res;
-  try {
-    res = await fetch(url, { ...init, signal: AbortSignal.timeout(secs * 1000) });
-  } catch (e) {
-    if (e.name === 'TimeoutError') throw new Error(`Model không trả lời sau ${secs} giây — chọn model nhanh hơn trong popup.`);
-    throw new Error('Không kết nối được tới API: ' + e.message);
+  const resets = init.resetLeft ?? 2; // sleeps through quota countdowns still allowed for this call
+  for (let tries = 0; ; tries++) {
+    let res;
+    try {
+      res = await fetch(url, { ...init, signal: AbortSignal.timeout(secs * 1000) });
+    } catch (e) {
+      if (e.name === 'TimeoutError') throw new Error(`Model không trả lời sau ${secs} giây - chọn model nhanh hơn trong popup.`);
+      throw new Error('Không kết nối được tới API: ' + e.message);
+    }
+    const body = await res.json().catch(() => ({}));
+    if (res.ok) return body;
+    const errMsg = body?.error?.message || body?.msg || '';
+    const wait = resetSeconds(errMsg);
+    if (wait && tries < resets) { await new Promise((r) => setTimeout(r, (wait + 2) * 1000)); continue; }
+    throw new Error(errMsg || 'HTTP ' + res.status);
   }
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.error?.message || 'HTTP ' + res.status);
-  return body;
 }
 
 const json = (headers, body, timeoutS) => ({ method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body), timeoutS });
@@ -195,10 +229,55 @@ function parsePlainLines(text) {
   return out;
 }
 
+// Merge duplicates the model produces when it aims two boxes at one bubble or splits one bubble's
+// lines into several boxes (real screenshots: a giant box over half the page + small ones inside;
+// two boxes 60%+ overlapping with the same text). Percent-space, runs after parseBubbles converts.
+//   same text (case/punct-insensitive) + overlap ≥40% of the smaller box -> one bubble: keep the
+//     tighter box, OR-in the sfx/style flags.
+//   one box inside another ≥90%, different text -> keep whichever carries the longer text (the
+//     outer is usually a panel-covering miss; the inner a precise split).
+//   overlap ≥85% of the smaller box, different text -> same: longer text wins.
+function mergeBubbles(bubbles) {
+  if (bubbles.length < 2) return bubbles;
+  const norm = (t) => String(t ?? '').toLowerCase().replace(/[.!?…、。！？\s]+/g, '');
+  const area = (b) => b.w * b.h;
+  const inter = (a, b) => {
+    const x = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x));
+    const y = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+    return x * y;
+  };
+  const out = bubbles.slice();
+  let merged = true;
+  while (merged) {
+    merged = false;
+    for (let i = 0; i < out.length && !merged; i++) {
+      for (let j = i + 1; j < out.length && !merged; j++) {
+        const a = out[i], b = out[j];
+        const ov = inter(a, b), small = Math.min(area(a), area(b));
+        if (!small || ov / small < 0.4) continue;
+        const same = norm(a.text) && norm(a.text) === norm(b.text);
+        let keep, drop;
+        if (same) {
+          keep = area(a) <= area(b) ? a : b; // tighter box fits the bubble better
+          drop = keep === a ? b : a;
+          keep.sfx ||= drop.sfx; keep.style ||= drop.style;
+        } else if (ov / small >= 0.9 || ov / small >= 0.85) {
+          keep = a.text.length >= b.text.length ? a : b;
+          drop = keep === a ? b : a;
+          keep.sfx ||= drop.sfx; keep.style ||= drop.style;
+        } else continue;
+        out.splice(out.indexOf(drop), 1);
+        merged = true;
+      }
+    }
+  }
+  return out;
+}
+
 function parseBubbles(text) {
   // Some models wrap JSON in fences; a few (measured: glm-4.6v via gateway, 2 of 3 runs with the
   // old prompt) ignore the schema entirely and answer with one "[ymin, xmin, ymax, xmax] text" line
-  // per bubble. JSON.parse throws on that, so fall back to a line parser before giving up — it
+  // per bubble. JSON.parse throws on that, so fall back to a line parser before giving up - it
   // recovered both runs verbatim (same boxes as the JSON run would give).
   let out;
   try {
@@ -215,7 +294,7 @@ function parseBubbles(text) {
   const bubbles = Array.isArray(out) ? out : Array.isArray(out?.bubbles) ? out.bubbles : Object.values(out ?? {}).find(look);
   if (!Array.isArray(bubbles)) {
     // a 200 response carrying the gateway's own error lands here ("số dư không đủ", rate limit…):
-    // surface it — it tells the user what's actually wrong, and the queue retries it the same way
+    // surface it - it tells the user what's actually wrong, and the queue retries it the same way
     const why = [out?.msg, out?.message, out?.error?.message, typeof out?.error === 'string' ? out.error : '']
       .find((v) => typeof v === 'string' && v.trim());
     throw new Error('Model trả JSON sai định dạng' + (why ? ': ' + why.trim().slice(0, 120) : '.'));
@@ -229,12 +308,15 @@ function parseBubbles(text) {
   // another scale (e.g. pixels): drop the box instead of clamping it into a page-covering white block.
   // A box over 25% of the page is never one speech bubble (largest on the test page is ~3.4%).
   const c = (v) => Math.min(1000, Math.max(0, v * x10)) / 10;
-  return bubbles.flatMap(({ box_2d: b, text: t, src, sfx }) => {
+  const STYLES = new Set(['big', 'small', 'shout', 'whisper', 'narration', 'vertical']);
+  const parsed = bubbles.flatMap(({ box_2d: b, text: t, src, sfx, style }) => {
     if (!t?.trim() || !Array.isArray(b) || b.length !== 4 || !b.every((v) => Number.isFinite(v) && v >= -10 && v <= 1010)) return [];
     const [y0, x0, y1, x1] = [c(Math.min(b[0], b[2])), c(Math.min(b[1], b[3])), c(Math.max(b[0], b[2])), c(Math.max(b[1], b[3]))];
     const w = x1 - x0, h = y1 - y0;
-    return w > 0 && h > 0 && w * h <= 2500 ? [{ x: x0, y: y0, w, h, text: t.trim(), ...(src && { src }), ...(sfx && { sfx: true }) }] : [];
+    const st = STYLES.has(style) ? style : '';
+    return w > 0 && h > 0 && w * h <= 2500 ? [{ x: x0, y: y0, w, h, text: t.trim(), ...(src && { src }), ...(sfx && { sfx: true }), ...(st && { style: st }) }] : [];
   });
+  return mergeBubbles(parsed);
 }
 
 async function probe({ provider, key, model, base }) {
@@ -380,7 +462,7 @@ function providerFor(id, base) {
           return anyIds(await api(`${this.base}/models`, { headers: P.listHeaders(key) }), id === 'gemini');
         } catch (e) {
           // most OpenAI-style servers live under /v1; a bare host usually answers 404 with an HTML page
-          if (/404/.test(e.message) && !/\/v\d+[a-z]*$/i.test(this.base)) throw new Error(`${e.message} — thử thêm /v1 vào cuối Base URL (vd ${this.base}/v1)`);
+          if (/404/.test(e.message) && !/\/v\d+[a-z]*$/i.test(this.base)) throw new Error(`${e.message} - thử thêm /v1 vào cuối Base URL (vd ${this.base}/v1)`);
           throw e;
         }
       },
@@ -391,7 +473,7 @@ function providerFor(id, base) {
 // Cache by image content + model: MangaDex recreates <img> tags for pages you go back to, and F5 reloads
 // them, so without this the same page is paid for again. Entries are ~1-2 KB; keep the newest CACHE_MAX.
 // Bump CACHE_V when the prompt changes, so results from the old prompt don't shadow the new ones.
-const CACHE_MAX = 500, CACHE_V = 3;
+const CACHE_MAX = 500, CACHE_V = 4;
 async function cacheKey(model, data) {
   const h = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(data)));
   return 'c:' + model + ':v' + CACHE_V + ':' + [...h.slice(0, 16)].map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -405,10 +487,56 @@ async function cachePut(key, bubbles) {
   }
 }
 
+// ---------- học hỏi tích lũy (memory theo site, sống qua reload/chapter) ----------
+// Bảng xưng hô + tên riêng + ghi chú văn phong cho mỗi site truyện, lưu trong chrome.storage.local
+// dưới khóa "mem:<site>". Mỗi trang: load -> đút vào prompt -> polish -> gộp lại cái mới học được.
+// Đây là "AI học sau mỗi lần dịch": chapter sau dùng đúng xưng hô/tên riêng chapter trước đã chốt.
+const MEM_MAX = 4000; // ký tự mỗi mục; đủ cho cả series, prompt không phình
+async function loadMem(site) {
+  if (!site) return { glossary: '', names: [], notes: [] };
+  const k = 'mem:' + site;
+  const m = (await chrome.storage.local.get(k))[k];
+  return { glossary: '', names: [], notes: [], ...(m || {}) };
+}
+async function saveMem(site, mem) {
+  if (!site) return;
+  await chrome.storage.local.set({ ['mem:' + site]: {
+    glossary: String(mem.glossary ?? '').slice(0, MEM_MAX),
+    names: [...new Set((mem.names || []).map(String))].slice(0, 60),
+    notes: [...new Set((mem.notes || []).map(String))].slice(0, 30),
+  } });
+}
+// Gộp bài học của trang này vào memory; trả về bản mới để trang sau dùng ngay.
+async function learnFromPage(site, mem, glossary, bubbles) {
+  if (!site) return mem;
+  const next = { ...mem };
+  // glossary: giữ dòng MỚI NHẤT cho mỗi cặp (khóa = đầu dòng "A ↔ B")
+  const rows = String(glossary || '').split('\n').map((l) => l.trim()).filter(Boolean);
+  const byHead = new Map();
+  for (const r of rows) byHead.set(r.split(':')[0].trim(), r);
+  next.glossary = [...byHead.values()].join('\n').slice(0, MEM_MAX);
+  // names: mót tên riêng từ src (chữ CJK dài, chữ Latin viết hoa) - model đã giữ nguyên chúng,
+  // liệt kê lại cho trang sau thấy "tên này đã biết, đừng dịch"
+  const names = new Set(mem.names || []);
+  for (const b of bubbles || []) {
+    for (const m of String(b.src || '').matchAll(/([\u4e00-\u9fff\u3040-\u30ff]{2,}|[A-Z][a-zA-Z]{2,})/g)) names.add(m[1]);
+  }
+  next.names = [...names].slice(0, 60);
+  await saveMem(site, next);
+  return next;
+}
+function memBlock(mem) {
+  const parts = [];
+  if (mem.glossary) parts.push('BẢNG XƯNG HÔ:\n' + mem.glossary);
+  if (mem.names?.length) parts.push('TÊN RIÊNG KHÔNG DỊCH: ' + mem.names.join(', '));
+  if (mem.notes?.length) parts.push('GHI CHÚ VĂN PHONG:\n' + mem.notes.join('\n'));
+  return parts.join('\n\n');
+}
+
 // ---------- hàng đợi dịch ----------
 // Mọi yêu cầu xếp hàng theo id (chính là key cache: ảnh+model), worker xử lý tối đa QMAX job cùng lúc:
 // nhiều tab không dồn API tới hỏng gateway (503/524), trang đang xem được ưu tiên lên đầu, và một câu
-// trả lời hỏng tạm thời được tự thử lại — người dùng không gặp lỗi là mấy. Kết quả xong được lưu vào
+// trả lời hỏng tạm thời được tự thử lại - người dùng không gặp lỗi là mấy. Kết quả xong được lưu vào
 // cache theo id (bền vững qua reload): lật lại trang đã dịch là hiện ngay, không tốn thêm lần gọi nào.
 const QMAX = 2, Q_TRIES = 3;
 let Q_RETRY_MS = 5000; // per-try backoff; the unit test shortens it
@@ -452,7 +580,7 @@ async function run(item) {
   try {
     const res = await translateJob(job, (draft) => {
       // the read pass just produced boxes: show them before polish runs (a visible page goes from
-      // ~2 calls' latency to 1 — measured on glm-4.6v: draft at 5-8s, polished +2.5s later)
+      // ~2 calls' latency to 1 - measured on glm-4.6v: draft at 5-8s, polished +2.5s later)
       for (const w of waiters.get(key) || []) w.onDraft?.(draft);
     });
     const w = waiters.get(key);
@@ -464,8 +592,11 @@ async function run(item) {
     job.tries = (job.tries || 0) + 1;
     if (job.tries < Q_TRIES) {
       // flaky answer (broken JSON, HTTP 524, a 200-wrapped gateway error): retry with backoff, but
-      // back in the queue, not asleep in the slot — the other pages keep their turn meanwhile
-      item.notBefore = Date.now() + job.tries * Q_RETRY_MS;
+      // back in the queue, not asleep in the slot - the other pages keep their turn meanwhile.
+      // A quota countdown means waiting it out once beats burning tries: sleep until it resets
+      // (resetSeconds is in SECONDS; Q_RETRY_MS is already in ms - do not scale it again).
+      const waitS = resetSeconds(String(e.message || ''));
+      item.notBefore = Date.now() + (waitS ? waitS * 1000 : job.tries * Q_RETRY_MS);
       pending.unshift(item);
     } else {
       const w = waiters.get(key);
@@ -478,7 +609,7 @@ async function run(item) {
 }
 
 // translate(): resolve provider + cache check, then hand the work to the queue
-async function translate({ data, mime, url, context, glossary = '', urgent, onDraft }) {
+async function translate({ data, mime, url, context, glossary = '', site, urgent, onDraft }) {
   if (!data) ({ data, mime } = await fetchImage(url));
   const { provider = 'anthropic', keys = {}, models = {}, bases = {}, polish: doPolish = true, sfx = true }
     = await chrome.storage.local.get(['provider', 'keys', 'models', 'bases', 'polish', 'sfx']);
@@ -487,7 +618,7 @@ async function translate({ data, mime, url, context, glossary = '', urgent, onDr
   const key = await cacheKey(models[provider] + (doPolish ? '+p' : '') + (sfx ? '' : '-sfx'), data);
   const hit = (await chrome.storage.local.get(key))[key];
   if (hit) return { bubbles: hit.bubbles, glossary }; // same page already translated by this model: no API call
-  const job = { key, data, mime, context, glossary, provider, base: bases[provider], model: models[provider], apiKey: keys[provider], doPolish, sfx };
+  const job = { key, data, mime, context, glossary, site, provider, base: bases[provider], model: models[provider], apiKey: keys[provider], doPolish, sfx };
   return new Promise((resolve) => enqueue(key, job, urgent, resolve, onDraft));
 }
 
@@ -496,23 +627,28 @@ async function translate({ data, mime, url, context, glossary = '', urgent, onDr
 // sfx=false drops the model's SFX-tagged bubbles before polish and before the draft is pushed,
 // so both paints and the cache agree on what the user asked to see.
 async function translateJob(job, onDraft) {
-  const { key, data, mime, context, glossary = '', provider, base, model, apiKey, doPolish, sfx = true } = job;
+  const { key, data, mime, context, glossary = '', site, provider, base, model, apiKey, doPolish, sfx = true } = job;
   const P = providerFor(provider, base);
-  const prompt = context ? `Lời thoại trang trước (giữ xưng hô nhất quán):\n${context}` : 'Đây là trang đầu tiên.';
+  // memory của site: xưng hô/tên riêng/văn phong học từ các trang & chapter trước
+  const mem = await loadMem(site).catch(() => ({ glossary: '', names: [], notes: [] }));
+  const head = memBlock(mem);
+  const prompt = (head ? head + '\n\n' : '') + (context ? `Lời thoại trang trước (giữ xưng hô nhất quán):\n${context}` : 'Đây là trang đầu tiên.');
   const call = () => P.translate(apiKey, model, { data, mime }, prompt, undefined, pageJob(doPolish));
   let bubbles = parseBubbles(await call());
   // a page that clearly has text but came back with zero boxes is a model flake (seen with gpt-5.6-sol,
-  // 1 run in 7): one retry, not a loop — a genuinely textless page pays a second call instead of lying
+  // 1 run in 7): one retry, not a loop - a genuinely textless page pays a second call instead of lying
   if (!bubbles.length) bubbles = parseBubbles(await call());
   if (!sfx) bubbles = bubbles.filter((b) => !b.sfx); // user turned SFX off: drop tagged bubbles
   onDraft?.(bubbles);
   let g = glossary;
   if (doPolish) {
     const before = glossary;
-    ({ bubbles, glossary: g } = await polish(P, apiKey, model, bubbles, context, glossary));
+    ({ bubbles, glossary: g } = await polish(P, apiKey, model, bubbles, context, head || glossary));
     // This page just added pronoun pairs: polish it once more under them, so it follows its own decision.
     // (gemini-3.1-flash-lite, real page, 3 runs: 1-2 mixed lines left after one pass, 0 after this.)
     if (g !== before) ({ bubbles, glossary: g } = await polish(P, apiKey, model, bubbles, context, g));
+    // học hỏi tích lũy: gộp bảng xưng hô + tên riêng của trang này vào memory của site
+    await learnFromPage(site, mem, g, bubbles).catch(() => {});
   }
   await cachePut(key, bubbles);
   return { bubbles, glossary: g };
@@ -545,6 +681,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, send) => {
     : msg.type === 'models' ? Promise.resolve().then(() => providerFor(msg.provider, msg.base).models(msg.key)).then((list) => ({ list }))
     : msg.type === 'probe' ? probe(msg).then((sample) => ({ sample }))
     : msg.type === 'defaults' ? Promise.resolve({ bases: Object.fromEntries(Object.entries(PROVIDERS).map(([k, p]) => [k, p.base])) })
+    : msg.type === 'mem' ? loadMem(msg.site).then((m) => ({ mem: m })) // popup: xem AI đã học gì về site này
+    : msg.type === 'mem-reset' ? saveMem(msg.site, { glossary: '', names: [], notes: [] }).then(() => ({ ok: true }))
     : null;
   if (!job) return;
   job.then(send, (e) => send({ error: String(e.message || e) }));

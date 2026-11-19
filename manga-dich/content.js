@@ -17,6 +17,8 @@
   const texts = new WeakMap(); // img -> its translated lines, used as the next page's context
   let active = 0;
   const srcOf = (img) => img.currentSrc || img.src;
+  // site key cho memory tích lũy (xưng hô + tên riêng học qua các chapter): hostname bỏ "www."
+  const SITE = location.hostname.replace(/^www\./, '');
 
   const css = document.createElement('style');
   css.textContent = `
@@ -25,9 +27,47 @@
       text-align:center;background:#fff;color:#111;border-radius:8px;padding:2px;box-sizing:border-box;overflow:hidden;
       font-family:"Segoe UI",Arial,sans-serif;font-weight:600;line-height:1.15;word-break:break-word;white-space:pre-line}
     .md-b.off{opacity:.08}
+    .md-b.st-small,.md-b.st-whisper{line-height:1.05;letter-spacing:-.2px}
+    .md-b.st-big{line-height:1.05;font-weight:800}
+    .md-b.st-shout{line-height:1;font-weight:800;font-style:italic;letter-spacing:.5px}
+    .md-b.st-narration{font-weight:400;font-style:italic;text-align:left;align-items:flex-start}
+    .md-b.st-vertical{writing-mode:vertical-rl}
     .md-status{position:absolute;top:4px;left:4px;max-width:calc(100% - 24px);background:#000c;color:#fff;font:12px/1.4 sans-serif;padding:4px 8px;border-radius:4px;pointer-events:auto}
     .md-retry{margin-left:6px;padding:2px 10px;border:0;border-radius:4px;background:#ff6740;color:#fff;font:600 12px sans-serif;cursor:pointer}`;
   document.head.append(css);
+
+  // Chống đè nhau: model trả box chồng nhau (ảnh chụp lỗi thật: 2 khung giao 35x170px) -> dịch
+  // khung NHỎ hơn ra hướng còn trống gần nhất. Khung to giữ vị trí (thường khớp bong bóng thật).
+  // Mỗi bước: thử 4 hướng đẩy 2%, chọn hướng giảm TỔNG DIỆN TÍCH chồng lấn nhiều nhất, tiến theo
+  // hướng đó (gradient descent cho khung chữ). Tối đa 40 bước - đủ trượt qua khung rộng 40%.
+  function separate(list) {
+    const PAD = 1.2; // % khoảng hở tối thiểu giữa hai khung
+    const overlaps = (a, b) => !(a.x + a.w + PAD <= b.x || b.x + b.w + PAD <= a.x || a.y + a.h + PAD <= b.y || b.y + b.h + PAD <= a.y);
+    const interArea = (a, b) => {
+      const x = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x));
+      const y = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+      return x * y;
+    };
+    const clamp = (b, x, y) => ({ ...b, x: Math.max(0, Math.min(100 - b.w, x)), y: Math.max(0, Math.min(100 - b.h, y)) });
+    // khung to đặt trước và giữ nguyên; khung nhỏ nhường đường
+    const order = list.map((b, i) => ({ b, i })).sort((a, z) => (z.b.w * z.b.h) - (a.b.w * a.b.h));
+    const placed = [];
+    for (const { b, i } of order) {
+      let cur = { x: b.x, y: b.y, w: b.w, h: b.h };
+      for (let step = 0; step < 40 && placed.some((p) => overlaps(cur, p)); step++) {
+        let best = null;
+        for (const [dx, dy] of [[0, -2], [0, 2], [-2, 0], [2, 0]]) {
+          const cand = clamp(cur, cur.x + dx, cur.y + dy);
+          const cost = placed.reduce((s, p) => s + interArea(cand, p), 0);
+          if (!best || cost < best.cost) best = { cand, cost };
+        }
+        cur = best.cand;
+      }
+      placed.push(cur);
+      list[i] = { ...b, ...cur };
+    }
+    return list;
+  }
 
   // fixed layer tracks the image; capture catches scrolls inside the reader's own scroll container
   const place = () => {
@@ -48,9 +88,15 @@
   // ceiling 30px: past that the box is bigger than any bubble's text should be.
   // 1px steps (not 2): with pre-wrapped lines the text no longer reflows when the font changes,
   // so the fit is exact and the extra iterations are cheap (≤4 more).
+  // Style hint từ model nới trần/đáy theo ngữ nghĩa: big/shout to hơn (38px), small/whisper nhỏ
+  // hơn (18px), narration vừa (24px) + in nghiêng văn kể - đúng yêu cầu "chỉnh size chữ theo nghĩa".
   const fits = (b) => b.scrollHeight <= b.clientHeight + 1 && b.scrollWidth <= b.clientWidth + 1;
   const fit = (b) => {
+    const st = b.dataset.style || '';
     let lo = 8, hi = 30, best = 8;
+    if (st === 'big' || st === 'shout') hi = 38;
+    else if (st === 'small' || st === 'whisper') { lo = 7; hi = 18; }
+    else if (st === 'narration') hi = 24;
     while (lo <= hi) {
       const mid = (lo + hi) >> 1;
       b.style.fontSize = mid + 'px';
@@ -121,13 +167,16 @@
         status.textContent = 'Không thấy chữ nào để dịch trên trang này';
         el.append(status);
       }
-      for (const t of list) {
+      // tách các khung chồng nhau TRƯỚC khi vẽ (lỗi "khung dịch đè lên nhau" trong ảnh chụp)
+      const separated = separate(list.slice());
+      for (const t of separated) {
         const b = document.createElement('div');
-        b.className = 'md-b';
+        b.className = 'md-b' + (t.style ? ' st-' + t.style : '');
+        b.dataset.style = t.style || '';
         // Line breaks chosen for THIS bubble's shape (a narrow bubble gets short, few-word lines),
-        // then white-space:pre-line renders them verbatim — the fit below only scales the font.
+        // then white-space:pre-line renders them verbatim - the fit below only scales the font.
         b.textContent = (typeof wrapText === 'function' ? wrapText(t.text, t.w / t.h) : t.text);
-        b.dataset.text = JSON.stringify({ text: t.text, sfx: !!t.sfx }); // SFX toggle re-wraps without a new call
+        b.dataset.text = JSON.stringify({ text: t.text, sfx: !!t.sfx, style: t.style || '' }); // SFX toggle re-wraps without a new call
         b.dataset.ar = t.w / t.h;
         b.title = 'Bấm để ẩn/hiện bản dịch';
         Object.assign(b.style, { left: t.x + '%', top: t.y + '%', width: t.w + '%', height: t.h + '%' },
@@ -147,7 +196,7 @@
       // canvas (px == null) can't be checked, so those pages always translate.
       if (px && typeof hasText === 'function' && window.__md.textOnly && !forced && !hasText(px).has) {
         img.dataset.mdDone = 'skip'; // not '1': "Vẫn dịch" must be able to retry it
-        status.textContent = 'Trang không có chữ — bỏ qua để tiết kiệm lượt gọi';
+        status.textContent = 'Trang không có chữ - bỏ qua để tiết kiệm lượt gọi';
         const force = document.createElement('button');
         force.className = 'md-retry';
         force.textContent = 'Vẫn dịch';
@@ -168,7 +217,7 @@
       const port = chrome.runtime.connect({ name: portName });
       let stage = 'waiting'; // waiting -> draft -> final: a late draft must never overwrite the final
       const draft = new Promise((res) => { port.onMessage.addListener((m) => { if (m.type === 'draft') res(m.bubbles); }); });
-      const final = chrome.runtime.sendMessage({ type: 'translate', ...msg, context, glossary: window.__md.glossary, urgent, draftPort: portName })
+      const final = chrome.runtime.sendMessage({ type: 'translate', ...msg, context, glossary: window.__md.glossary, site: SITE, urgent, draftPort: portName })
         .finally(() => { stage = 'final'; try { port.disconnect(); } catch { /* already gone */ } });
       draft.then((bubbles) => { // read pass done, polish still running: show the draft now
         if (stage !== 'waiting' || !px || typeof fitBubbles !== 'function') return;
@@ -220,7 +269,7 @@
   setInterval(() => { place(); pump(); }, 700); // page flips by keyboard/click don't scroll
 
   // SFX toggle from the popup: every fitted bubble carries its raw text (bubbles translated with
-  // the other setting are filtered out), so swapping = re-wrap what's left and re-fit in place —
+  // the other setting are filtered out), so swapping = re-wrap what's left and re-fit in place -
   // no API call, no page flip, works on drafts too.
   const setSfx = (on) => {
     window.__md.sfx = on;
@@ -235,7 +284,7 @@
     place();
   };
 
-  window.__md = { overlays, pump, setSfx, glossary: '', textOnly: true, sfx: true };
+  window.__md = { overlays, pump, setSfx, glossary: '', textOnly: true, sfx: true, site: SITE };
   chrome.storage.local.get(['sfx', 'textOnly']).then((s) => {
     window.__md.sfx = s.sfx ?? true;
     window.__md.textOnly = s.textOnly ?? true;
