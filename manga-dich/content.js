@@ -375,7 +375,20 @@
       if (px && window.__md.recover) {
         const extra = await recover(img, px, res.bubbles, o);
         if (extra.length && !o.cancelled) {
-          res.bubbles = res.bubbles.concat(extra);
+          // The model often merges two neighbouring bubbles into one line and leaves the second bubble's
+          // text untranslated; the recovered crop then repeats that part (live Sangeki run: "Thôi nào,
+          // Roka. Giúp tớ một tay đi chứ." shown twice). Keep it in its own bubble only.
+          // Same sentence twice = the page pass put that line in the wrong place (live Sangeki run: on a
+          // character's hair beside the bubble) and the crop found its real bubble; the crop sits on verified
+          // lettering, so it wins and the misplaced copy goes.
+          const norm = (t) => String(t || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+          const again = new Set(extra.map((x) => norm(x.text)));
+          res.bubbles = res.bubbles.filter((b) => !again.has(norm(b.text)));
+          for (const x of extra) for (const b of res.bubbles) {
+            const t = (x.text || '').trim();
+            if (t.length >= 6 && b.text !== t && b.text.includes(t)) b.text = b.text.replace(t, '').replace(/\s{2,}/g, ' ').trim();
+          }
+          res.bubbles = res.bubbles.filter((b) => /[\p{L}\p{N}]/u.test(b.text)).concat(extra);
           draw(res.bubbles);
           texts.set(img, res.bubbles.map((t) => t.text).join('\n'));
         }

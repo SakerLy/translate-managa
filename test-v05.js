@@ -118,7 +118,8 @@ console.log('strict schema OK');
 {
   const sys = vm.runInContext('SYSTEM', bctx), pol = vm.runInContext('POLISH_SYSTEM', bctx);
   for (const k of ['anh trai↔em gái', 'chị gái↔em trai', 'ông bà↔cháu']) assert.ok(sys.includes(k), 'page prompt: ' + k);
-  for (const k of ['Họ hàng', 'cậu (anh/em trai mẹ)', 'senpai', 'Samurai', 'お兄ちゃん', '俺', 'hermano', 'TUỔI QUYẾT ĐỊNH', 'VĂN PHONG MANGA']) assert.ok(pol.includes(k), 'polish prompt: ' + k);
+  for (const k of ['Họ hàng', 'cậu (anh/em trai mẹ)', 'senpai', 'Samurai', 'お兄ちゃん', '俺', 'hermano', 'TUỔI QUYẾT ĐỊNH', 'VĂN PHONG MANGA', 'BẪY DỊCH SÁT CHỮ', 'càng sớm càng tốt', 'NGƯỜI NGHE', 'KHÔNG bịa chữ']) assert.ok(pol.includes(k), 'polish prompt: ' + k);
+  assert.ok(!pol.includes('Draft đã đúng và tự nhiên thì giữ nguyên'), 'polish rewrites instead of keeping stiff drafts');
   for (const k of ['manga', 'Tây Ban Nha', 'Indonesia', 'Tanaka-san']) assert.ok(sys.includes(k), 'manga + scanlation languages: ' + k);
   // the repo is manga-only: no manhwa/manhua rules left to confuse the model
   for (const k of [/manhwa/i, /manhua/i, /webtoon/i, /HÁN VIỆT/, /오빠/, /哥哥/]) assert.ok(!k.test(sys + pol), 'no non-manga rule: ' + k);

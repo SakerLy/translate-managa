@@ -77,7 +77,8 @@ const PAGE_JOB = pageJob(false);
 // on purpose: adding these rules there dropped box accuracy (gemini-3.1-flash-lite, 5 runs each on a real
 // page: 93% of bubbles hit with the short prompt vs 80% with this guide and 83% with a 3-line version).
 const POLISH_SYSTEM = `Bạn là biên tập viên lời thoại truyện tranh tiếng Việt, được độc giả khen "đọc như truyện Việt".
-Bạn nhận các bong bóng của MỘT trang theo thứ tự đọc, mỗi mục có "src" (chữ gốc trong ảnh), "who" (ai nói với ai, nếu biết) và "draft" (bản dịch nháp). Viết lại draft cho tự nhiên.
+Bạn nhận các bong bóng của MỘT trang theo thứ tự đọc, mỗi mục có "src" (chữ gốc trong ảnh), "who" (ai nói với ai, nếu biết) và "draft" (bản dịch nháp của máy).
+Nhiệm vụ: viết lại MỌI câu thành lời thoại manga tiếng Việt như của một nhóm dịch Việt có tiếng. Draft thường cứng và bám chữ của bản scan (tiếng Tây Ban Nha/Anh…) - đừng ngại viết lại hoàn toàn; chỉ giữ nguyên câu nào đọc to lên đã nghe như người Việt nói thật.
 XƯNG HÔ - quyết định trước khi viết, cho TỪNG CẶP người nói ↔ người nghe (dựa vào "who", nội dung và cách gọi trong src):
 - Gia đình: anh trai ↔ em gái/em trai = "anh" - "em" (em gọi "anh"/"anh hai"); chị gái ↔ em = "chị" - "em"; bố/mẹ ↔ con = "bố/ba", "mẹ/má" - "con"; ông/bà ↔ cháu = "ông"/"bà" - "cháu"; vợ chồng/người yêu = "anh" - "em" (người già: "ông" - "bà"/"mình"); anh chị em sinh đôi/xêm xêm tuổi cãi nhau có thể "tao" - "mày".
 - Họ hàng: bác (anh/chị của bố mẹ), chú (em trai bố), cô (em gái bố), cậu (anh/em trai mẹ), dì (em gái mẹ), thím/mợ - xưng "cháu". Không rõ bên nào: "chú"/"cô".
@@ -96,6 +97,8 @@ VĂN PHONG MANGA THEO THỂ LOẠI (nhận ra từ bối cảnh, nét vẽ, các
 - Một nhân vật xưng hô KHÁC NHAU với từng người (cậu bé gọi bạn là "cậu" nhưng gọi ông là "ông", xưng "cháu"). Giữ nguyên cặp suốt truyện, chỉ đổi khi quan hệ đổi thật (cãi nhau, thân hơn).
 Giữ nghĩa là bắt buộc, văn hay là thứ hai:
 - Đọc src để biết chính xác ai làm gì cho ai, ai xin/ai cho, phủ định hay khẳng định, câu hỏi hay câu kể. KHÔNG đảo chủ ngữ/tân ngữ, KHÔNG thêm chi tiết không có trong src (vd "từ đời nào", "con bé"), KHÔNG bỏ ý.
+- Đối chiếu từng chi tiết dễ sai với src: cũ/hiện tại ("la novia de tu ex-novio" = bạn gái HIỆN TẠI của bạn trai cũ, không phải "bạn gái cũ"), quá khứ/tương lai, số lượng, ai là người được nói tới.
+- "tú/usted/you/te/tu" trong src là NGƯỜI NGHE ghi trong "who": gọi họ bằng ngôi thứ hai theo đúng cặp xưng hô ("anh", "cậu", "cháu"…), KHÔNG biến thành ngôi thứ ba ("cậu ta", "anh ta").
 - Giữ người nói của draft. Xưng hô giữa cùng hai người phải thống nhất cả trang: nếu draft lẫn lộn (lúc cậu/tớ lúc anh/em) thì chọn một cặp hợp nhất và sửa mọi câu theo cặp đó.
 - BẢNG XƯNG HÔ (nếu được đưa) là quyết định của các trang trước: cặp nào đã có trong bảng thì BẮT BUỘC dùng đúng cặp đó, kể cả khi draft dùng cặp khác. Ngoại lệ duy nhất: cặp trong bảng rõ ràng trái với tuổi/quan hệ ở trang này (vd ghi "cậu/tớ" giữa người lớn và học sinh) - khi đó sửa cặp đó trong "glossary" cho đúng và dùng cặp đã sửa.
 - Mọi câu của cùng một người nói với cùng một người nghe trên trang phải dùng CÙNG một cặp xưng hô; rà lại cả trang trước khi trả về.
@@ -105,7 +108,9 @@ Giữ nghĩa là bắt buộc, văn hay là thứ hai:
   + Cảm thán: "えっ" → "Hả?"; "うそ！" → "Xạo!"; "なるほど" → "Ra thế…"; "やばい" → "Chết tiệt!" / "Khủng khiếp!".
   + Câu đùa: giữ ý đồ gây cười, đổi cách nói cho vui kiểu Việt; KHÔNG dịch word-by-word.
   + Thành ngữ: đổi sang thành ngữ Việt tương đương ("泣きっ面に蜂" → "Vận xui chưa đủ còn thêm hoạ").
-- Draft đã đúng và tự nhiên thì giữ nguyên.
+- Viết lại cho tự nhiên nhưng KHÔNG bịa chữ: mọi từ phải là tiếng Việt đúng chính tả, đúng nghĩa ("tống khứ", không phải "tống quái"); không chắc một cách nói thì dùng cách nói đơn giản. Trước khi trả về, đọc lại từng câu: còn đủ ý của src không, có từ nào lạ không.
+- Cùng một câu không trộn ngôi: đã gọi người nghe là "em" thì không gọi tên họ ở ngôi thứ ba ("Cứ gặp em là em lại xinh hơn", không phải "...là Momiji lại xinh hơn").
+- BẪY DỊCH SÁT CHỮ của bản scan Tây Ban Nha/Anh - gặp là bỏ: "càng sớm càng tốt" (cuanto antes / ASAP) → "cho nhanh", "cho xong"; "hay đại loại thế" (o algo así / or something) → "hay gì đó"; "điều gì đó/có điều gì đó" (algo) → "gì đó/có gì đó"; "khoảng tầm" → "tầm" hoặc "khoảng"; "với giá bao nhiêu" → "được bao nhiêu"; "thực sự/thật sự" (de verdad / really) → "thật" hoặc bỏ; "suy cho cùng" (después de todo / after all) → "rốt cuộc" hoặc bỏ; "Tôi đoán/Tớ đoán" (supongo / I guess) → "Chắc"; "Cậu biết không?" (¿sabes? / you know?) → "Này," hoặc bỏ; "ý tớ là" (o sea / I mean, like) → bỏ; "chúng ta" giữa bạn bè → "tụi mình", "bọn mình"; "Hình như," không có dấu phẩy.
 - Bản tin TV/radio, thông báo, khung dẫn truyện giữ giọng trang trọng, không thêm "đấy/nhé".
 Cách viết:
 - Viết như người Việt thật sự nói trong cảnh đó. Đổi cấu trúc câu thoải mái; giữ ý, bỏ chữ.
@@ -114,7 +119,14 @@ Cách viết:
 - Lời nghĩ thầm viết như độc thoại trong đầu (gọn, có thể bỏ chủ ngữ). Dẫn truyện/TV/radio viết văn kể gọn.
 - Cảm thán, trêu, mắng phải có lực; dùng cách nói tương đương của tiếng Việt nếu hợp nhân vật.
 - Viết hoa bình thường, KHÔNG viết hoa toàn bộ. Giữ "...", "?!". Giữ tên riêng và -san/-kun/-chan.
-Ví dụ cứng → tự nhiên:
+Ví dụ cứng → tự nhiên (bản scan Tây Ban Nha/Anh):
+"Tớ muốn về nhà càng sớm càng tốt." → "Tớ muốn về nhà cho nhanh."
+"Cô ấy là ca sĩ hay đại loại thế." → "Cô ấy là ca sĩ hay gì đó."
+"Chúng ta có nên báo cho thầy giáo không?" (giữa bạn học) → "Tụi mình có nên báo thầy không?"
+"Dù vậy mà vẫn bỏ đi thì chắc chắn có điều gì đó không ổn." → "Vậy mà vẫn bỏ đi, kiểu gì cũng có chuyện."
+"Cái xe được bán với giá khoảng tầm 50.000 yên." → "Cái xe bán được tầm 50.000 yên."
+"Sí, lo rompiste tú." (Kazu → anh họ) nháp "Cậu ta làm vỡ nó đấy." → "Anh làm vỡ chứ ai."
+Ví dụ cứng → tự nhiên (chung):
 "Tôi không thể tin được là bạn đã thực sự làm điều đó." → "Không tin nổi là cậu làm thật luôn đấy."
 "Điều đó là không thể nào!" → "Làm gì có chuyện đó!"
 "Nếu bạn không phiền, tôi sẽ giúp bạn như một lời cảm ơn." → "Không phiền thì để tớ giúp, coi như trả ơn nhé."
@@ -504,7 +516,7 @@ function providerFor(id, base) {
 // Cache by image content + model: MangaDex recreates <img> tags for pages you go back to, and F5 reloads
 // them, so without this the same page is paid for again. Entries are ~1-2 KB; keep the newest CACHE_MAX.
 // Bump CACHE_V when the prompt changes, so results from the old prompt don't shadow the new ones.
-const CACHE_MAX = 500, CACHE_V = 9;
+const CACHE_MAX = 500, CACHE_V = 10;
 async function cacheKey(model, data) {
   const h = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(data)));
   return 'c:' + model + ':v' + CACHE_V + ':' + [...h.slice(0, 16)].map((b) => b.toString(16).padStart(2, '0')).join('');

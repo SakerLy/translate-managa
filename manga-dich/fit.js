@@ -113,11 +113,11 @@ function fitBubbles(px, bubbles, anchor = true) {
   centres = boxes.map(([x0, y0, x1, y1]) => [(x0 + x1) / 2, (y0 + y1) / 2]);
 
   // grow a set of letter blobs from a seed box (within G px), repeat so whole lines join
-  const grow = (letters, x0, y0, x1, y1) => {
+  const grow = (letters, x0, y0, x1, y1, g = G) => {
     for (let pass = 0, grew = true; grew && pass < 6; pass++) {
       grew = false;
       for (const bl of letters) {
-        if (bl.used || bl.x1 < x0 - G || bl.x0 > x1 + G || bl.y1 < y0 - G || bl.y0 > y1 + G) continue;
+        if (bl.used || bl.x1 < x0 - g || bl.x0 > x1 + g || bl.y1 < y0 - g || bl.y0 > y1 + g) continue;
         bl.used = true; grew = true;
         x0 = Math.min(x0, bl.x0); y0 = Math.min(y0, bl.y0); x1 = Math.max(x1, bl.x1 + 1); y1 = Math.max(y1, bl.y1 + 1);
       }
@@ -204,7 +204,16 @@ function fitBubbles(px, bubbles, anchor = true) {
     return n ? ok / n : 0;
   };
   const out = fitted.map((f, k) => {
-    if (!f.px) return f.b;
+    if (!f.px) {
+      // No letters found = text drawn straight on art (screentone, hatching), where the model's box is all we
+      // have and it tends to stop a line short (live Sangeki run: "...SE DA CUENTA?" left under a caption).
+      // A little margin all round; the box sits on art anyway, there's no bubble to spill out of.
+      const b = f.b;
+      if (b.fit !== 'kept' || !(b.w > 0) || !(b.h > 0)) return b;
+      const mx = Math.min(b.w * 0.08, 2), my = Math.min(b.h * 0.3, 3); // ~one line of lettering above and below
+      const x = Math.max(0, b.x - mx), y = Math.max(0, b.y - my);
+      return { ...b, x, y, w: Math.min(100 - x, b.w + 2 * mx), h: Math.min(100 - y, b.h + 2 * my) };
+    }
     let [x0, y0, x1, y1] = f.px;
     const maxW = Math.min(W, Math.max(1.5 * (x1 - x0), x1 - x0 + 0.04 * W)), maxH = Math.min(H, Math.max(1.35 * (y1 - y0), y1 - y0 + 0.03 * H)); // open bubbles merge into white art: stay modest
     const live = [true, true, true, true]; // top, right, bottom, left
