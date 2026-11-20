@@ -123,6 +123,9 @@ console.log('malformed GPT boxes OK');
   assert.ok(mid >= lines[0].length && mid >= lines[lines.length - 1].length, 'diamond/oval profile: ' + JSON.stringify(lines));
   assert.equal(shape('Xiết chặtttttttttttttttttttttttttttttttttt', measure, 60, 40, 20), null, 'a word wider than the box does not fit');
   assert.deepEqual(shape('Ừ', measure, 100, 40, 20), ['Ừ']);
+  // no lone syllable on the last line (a letterer's rule)
+  const em = shape('Em thay đổi nhiều quá nên cứ sợ thầy không nhận ra', measure, 110, 200, 20);
+  assert.ok(em && /\s/.test(em[em.length - 1]), 'last line has 2+ words: ' + JSON.stringify(em));
 }
 console.log('ellipseLines OK');
 

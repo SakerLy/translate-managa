@@ -44,7 +44,27 @@ Các bản tạm "ver 0.6.0" … "ver 0.8.0" (19–20/11/2026) chưa được te
 - Dịch bù đọc lại một phần khung chữ đã dịch nên hiện hai bản dịch.
 - Model đặt nhiều câu vào cùng một ô (gộp còn 1/12 câu); một câu lặp ở nhiều ô; model chép lại câu lệnh; toạ độ theo pixel.
 
+**Kiểm tra trên trình duyệt thật với GPT (gpt-6.1-sol), 3 bộ truyện**
+- GPT trả nhiều ô bị đảo x/y trên cùng một trang: ô chỉ có vài nét lạc ở chỗ sai giờ cũng được đảo khi phía đối xứng rõ ràng có chữ; ô cao gầy vô lý cho một dòng chữ Latin được đảo theo hình dạng khi trang đã có ô bị đảo.
+- Ô của GPT đặt nhầm lên chữ của bong bóng khác (bản dịch một khung dẫn chuyện thay mất câu của bong bóng): ô khớp kém hơn hẳn bị bỏ, không ghi đè bong bóng bên cạnh.
+- SFX: không còn bị dời lên khối chữ khác (đã rơi lên mặt nhân vật); SFX nằm lên chữ của bong bóng thì thử vị trí đối xứng, không thì bỏ; SFX không xoá được hiện thành chữ viền, không còn khối trắng che tranh.
+- Chữ xoá từng nét còn để lại viền mờ của chữ gốc: xoá rộng thêm phần viền nhoè của JPEG trên nền giấy.
+- Dòng cuối của chữ to/hét bị bỏ sót khi xoá ("YOU." dưới "I'LL KILL"); một nửa của bong bóng hai cụm chữ bị cắt về một chữ nhỏ (chữ Anh còn nguyên, bản dịch tí hon); chữ trên tranh bị nới theo nét gạch bóng tới mặt nhân vật.
+- Chữ hét trên tranh được GPT gắn nhãn "big" cũng dùng dải ngang thay khối đen.
+- Ô tự nới khi chữ Việt dài hơn không còn nới đè lên bản dịch bên cạnh (cả bước đồng đều cỡ chữ trên trang).
+- Các dòng credit/dẫn chuyện xếp sát nhau không còn mất một dòng vì bị coi là "ô lạc chỗ".
+
+**Biên tập như nhóm dịch chuyên nghiệp**
+- Bước trau chuốt có thêm quy tắc của editor/typesetter: câu dịch không dài hơn bản nháp (bong bóng không to ra), tên katakana phiên âm Latin chứ không đổi thành từ tiếng Anh, dấu câu kiểu sách Việt ("…", "?!", "—"), SFX 1-3 âm tiết tượng thanh tiếng Việt.
+- Ngắt dòng không để một chữ lẻ trơ trọi ở dòng cuối của bong bóng.
+
+**Trang tiêu đề (logo, phụ đề, credit)**
+- GPT hay chuyển sang trả toạ độ đảo x/y từ giữa câu trả lời trở đi; ô không kiểm chứng được bằng điểm ảnh (logo, credit) giờ đi theo các ô quanh nó trong câu trả lời: trước và sau đều bị đảo thì đảo theo. Logo, phụ đề và ba dòng credit về đúng chỗ.
+- Sau khi xoá, extension kiểm tra còn bao nhiêu nét chữ gốc lộ ra (đo trên trang thật: bong bóng còn 0-1%, logo xoá dở còn 15%, phụ đề 44%). Khung chữ trên nền sáng còn sót nhiều thì thay bằng một tấm nền phủ kín vùng chữ, như thợ dịch làm với logo không vẽ lại được; tấm nền không lấn sang bản dịch bên cạnh và không bao giờ dùng trên nền tối.
+
 **Xưng hô và trí nhớ**
+- Trí nhớ không học được gì khi bước trau chuốt lỗi liên tục (hết lượt theo phút của Groq, gateway lỗi): trang giờ báo rõ "chưa trau chuốt được, AI chưa học từ trang này"; lỗi giới hạn theo phút được chờ hết phút thay vì thử lại ngay trong cùng phút.
+- Nhân vật được biết tên sau (ví dụ "Akasumi Goro (thầy giáo)") thay dòng "Thầy giáo" cũ và đổi tên trong bảng xưng hô, không để hai dòng song song.
 - Thêm quy tắc xưng hô: giới tính, khoảng cách tuổi, người yêu chị em, thầy trò / chức danh chốt cả cặp, ngôi số nhiều, lời dẫn phải khớp lời thoại; các trang của một bộ được trau chuốt lần lượt để trang sau dùng điều trang trước vừa học.
 - Trí nhớ bị ghi đè mỗi trang (mất cặp xưng hô và nhân vật cũ): giờ gộp.
 - Tên bộ truyện sai (mã ID, dính thẻ mô tả) và trí nhớ dồn vào "cả site": tên lấy từ tiêu đề tab, bộ truyện MangaDex lấy từ API; tên cập nhật cả khi mở trang đã dịch; trang cài đặt tự cập nhật.

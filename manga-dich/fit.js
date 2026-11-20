@@ -133,7 +133,47 @@ function fitBubbles(px, bubbles, anchor = true) {
     // page on a real Spanish page ("Chị ơi…" flung from bottom-left to the middle)
     // ...and only onto text no other box claims: a white-on-black caption (no detectable letters where it
     // really is) was mirrored onto a neighbour bubble's text, its Spanish left showing (live Sangeki run)
-    return o === 0 && s >= 8 && !bubbles.some((x, j) => j !== i && (overlap(sb, x) > 0.3 || overlap(x, sb) > 0.3)) && inkHere(b) < 6 ? { ...sb, swap: true } : b;
+    // "no text here" was too strict: GPT-6.1-sol swapped half a page's boxes and one landed on 3 stray letters
+    // (34 on its mirror) - "Well, I knew…" stayed on the hair, its bubble untranslated (live 66dcdbac/8)
+    return s >= 8 && s > 3 * o + 4 && !bubbles.some((x, j) => j !== i && (overlap(sb, x) > 0.3 || overlap(x, sb) > 0.3)) && inkHere(b) < 6 ? { ...sb, swap: true } : b;
+  });
+  // No lettering to vote on either side (a bubble the block finder misses), yet this answer already swapped
+  // 2+ boxes: the shape decides. Latin text written in lines is never a column 2.5x taller than wide in
+  // pixels (live GPT 66dcdbac/8: "RIGHT…?" came as a 1.8%x8.8% strip on a face; swapped, it is its bubble).
+  if (!swapAll && bubbles.filter((b) => b.swap).length >= 2) {
+    bubbles = bubbles.map((b, i) => {
+      const [o, s] = ev[i];
+      if (b.swap || o >= 6 || s >= 6 || /[぀-ヿ㐀-鿿가-힯]/.test(b.src || '') || b.style === 'vertical') return b;
+      const tall = b.h / 100 * H > 2.5 * (b.w / 100 * W);
+      return tall && b.h / 100 * W > b.w / 100 * H ? { ...swapped(b), swap: true } : b;
+    });
+  }
+  // GPT drifts into [x, y] partway through its answer and stays there: the first lines right, the rest swapped
+  // (live aa77c143/4 - bubbles then the title logo and credits, which no pixel test can verify). A box the
+  // pixels can't judge follows the boxes around it in the answer: the nearest decided one before it swapped,
+  // and the nearest after it too (or none left) -> swap it, unless that lands on a box confirmed in place.
+  if (!swapAll) {
+    const dec = ev.map(([o, s]) => (s >= 6 && s > 2 * o + 2 ? 1 : o >= 6 && o >= s ? -1 : 0));
+    bubbles = bubbles.map((b, i) => {
+      if (b.swap || dec[i] === -1) return b;
+      let p = i - 1, n = i + 1;
+      while (p >= 0 && !dec[p]) p--;
+      while (n < bubbles.length && !dec[n]) n++;
+      if (p < 0 || dec[p] !== 1 || (n < bubbles.length && dec[n] !== 1)) return b;
+      const sb = swapped(b);
+      if (bubbles.some((x, j) => j !== i && dec[j] === -1 && (overlap(sb, x) > 0.3 || overlap(x, sb) > 0.3))) return b;
+      return { ...sb, swap: true };
+    });
+  }
+  // An SFX box on lettering a speech box also covers is misplaced (GPT swapped "ばふっ" into the "Could you…"
+  // bubble, whose line was then squeezed tiny - live 822342aa/7): its mirror spot if that is free of speech,
+  // else it is not drawn there (unverified -> trimOverlaps drops it).
+  const onSpeech = (b, self) => blocks.some((t) => t.n >= 6 && overlap(t, b) >= 0.15
+    && bubbles.some((o, j) => j !== self && o.kind !== 'sfx' && overlap(t, o) >= 0.4));
+  bubbles = bubbles.map((b, i) => {
+    if (b.kind !== 'sfx' || !onSpeech(b, i)) return b;
+    const sb = swapped(b);
+    return !b.swap && !onSpeech(sb, i) ? { ...sb, swap: true } : { ...b, misplaced: true };
   });
   bubbles = splitMerged(bubbles);
   boxes = bubbles.map(toPx);
@@ -281,12 +321,34 @@ function fitBubbles(px, bubbles, anchor = true) {
     return [Math.max(0, x0 - P), Math.max(0, y0 - P), Math.min(W, x1 + P), Math.min(H, y1 + P)];
   };
 
+  // Two boxes on one block of lettering, one of them clearly aimed elsewhere: GPT put "People outside might
+  // get the wrong idea…" (a caption on hatching, which the block finder can't see) over the "I CAN'T BELIEVE…"
+  // bubble that its own box already covered - the caption's translation replaced the bubble's (live
+  // 66dcdbac/8). The box that fits the block best keeps it; a rival whose only lettering is that block and that
+  // fits it far worse is treated as unverified, so it never paints over its neighbour (trimOverlaps drops it,
+  // the missed-text pass reads what is really there).
+  const stolen = new Set();
+  const iou = (t, b) => {
+    const x = Math.max(0, Math.min(t.x + t.w, b.x + b.w) - Math.max(t.x, b.x)), y = Math.max(0, Math.min(t.y + t.h, b.y + b.h) - Math.max(t.y, b.y));
+    return x * y / (t.w * t.h + b.w * b.h - x * y);
+  };
+  for (const t of blocks) {
+    if (t.n < 6 || t.faded) continue;
+    const on = bubbles.map((b, i) => [i, iou(t, b)]).filter(([i]) => overlap(t, bubbles[i]) >= 0.4);
+    if (on.length < 2) continue;
+    const best = Math.max(...on.map(([, v]) => v)), bi = on.find(([, v]) => v === best)[0];
+    // the rival's own lettering: blocks it covers that the best box doesn't (a sub-block of the same text
+    // inside the bubble is not its own)
+    const own = (i) => blocks.some((u) => u.n >= 6 && overlap(u, bubbles[i]) >= 0.4 && overlap(u, bubbles[bi]) < 0.4);
+    for (const [i, v] of on) if (i !== bi && v < 0.5 * best && !own(i)) stolen.add(i);
+  }
   const fitted = bubbles.map((b, me) => {
     const [bx0, by0, bx1, by1] = boxes[me];
     if (bx1 - bx0 < 4 || by1 - by0 < 4) return { b };
     const bg = bgOf(bx0, by0, bx1, by1);
     const lum = 0.299 * bg[0] + 0.587 * bg[1] + 0.114 * bg[2];
     const style = { bg: `rgb(${bg[0]},${bg[1]},${bg[2]})`, fg: lum < 110 ? '#fff' : '#111' };
+    if (stolen.has(me) || b.misplaced) return { b: { ...b, ...style, fit: 'kept' } };
 
     // A box over 8% of the page is already a model mistake (largest real bubble on the test page: 3.4%):
     // growing it would follow hair/screentone into the art. Try to shrink it to the text cluster inside
@@ -328,11 +390,40 @@ function fitBubbles(px, bubbles, anchor = true) {
         const ix = Math.min(r[2], (t.x + t.w) * W / 100) - Math.max(r[0], t.x * W / 100), iy = Math.min(r[3], (t.y + t.h) * H / 100) - Math.max(r[1], t.y * H / 100);
         return ix > 0 && iy > 0 && ix * iy >= 0.5 * (t.w * W / 100) * (t.h * H / 100);
       };
-      const inR = blocks.filter((t) => !t.faded && t.n >= 6 && half(t));
-      if (inR.length && (!b.kind || b.kind === 'bubble')) {
+      const big = blocks.filter((t) => !t.faded && t.n >= 6 && half(t));
+      // a short word (3-5 letters) right next to that lettering is its last line, not a speck: "YOU." under
+      // "I'LL KILL" was cut off and left unerased (live GPT 66dcdbac/10). A lone speck far off still doesn't count.
+      const gap = (a, c) => Math.max(0, Math.max(a.x, c.x) - Math.min(a.x + a.w, c.x + c.w)) * W / 100 + Math.max(0, Math.max(a.y, c.y) - Math.min(a.y + a.h, c.y + c.h)) * H / 100;
+      const inR = big.concat(blocks.filter((t) => !t.faded && t.n >= 3 && t.n < 6 && half(t)
+        && big.some((c) => gap(t, c) < 2 * t.h * H / 100)));
+      // ...and only when no bigger block is cut through: one lobe of a split bubble covers part of the whole
+      // bubble's block, and clamping it to the small word inside left the rest of its English (live GPT 66dcdbac/9)
+      const share = (t) => {
+        const ix = Math.min(r[2], (t.x + t.w) * W / 100) - Math.max(r[0], t.x * W / 100), iy = Math.min(r[3], (t.y + t.h) * H / 100) - Math.max(r[1], t.y * H / 100);
+        return ix > 0 && iy > 0 ? ix * iy / ((t.w * W / 100) * (t.h * H / 100)) : 0;
+      };
+      const cutThrough = blocks.some((t) => !t.faded && t.n >= 6 && share(t) > 0.1 && share(t) < 0.5);
+      if (inR.length && !cutThrough && (!b.kind || b.kind === 'bubble')) {
         const pad = Math.max(P + 2, Math.round(0.006 * H));
         const u = [Math.min(...inR.map((t) => t.x)) * W / 100 - pad, Math.min(...inR.map((t) => t.y)) * H / 100 - pad,
           Math.max(...inR.map((t) => t.x + t.w)) * W / 100 + pad, Math.max(...inR.map((t) => t.y + t.h)) * H / 100 + pad];
+        // letters the block finder missed (white "YOU." on a black bubble, live GPT 66dcdbac/10) but that are
+        // letter-height and within about a line of the lettering are its next line: keep them inside the cut
+        const lhs = (used || []).map((bl) => bl.y1 - bl.y0 + 1).filter((h) => h >= 3).sort((a, z) => a - z);
+        const mh = lhs.length ? lhs[lhs.length >> 1] : 0;
+        for (let grew = mh > 0; grew;) {
+          grew = false;
+          for (const bl of used || []) {
+            const h = bl.y1 - bl.y0 + 1, inside = bl.x0 >= u[0] && bl.x1 <= u[2] && bl.y0 >= u[1] && bl.y1 <= u[3];
+            if (inside || h < 0.5 * mh || h > 1.8 * mh) continue;
+            // the line above or below only (within the lettering's width): hearts and hair beside it stay out
+            const dx = Math.max(0, u[0] - bl.x1, bl.x0 - u[2]), dy = Math.max(0, u[1] - bl.y1, bl.y0 - u[3]);
+            // ...and never wider: hearts under a bubble widened it one by one (live 66dcdbac/8)
+            if (dx > 0 || bl.x0 < u[0] || bl.x1 > u[2] || dy > 1.2 * mh) continue;
+            u[1] = Math.min(u[1], bl.y0 - pad); u[3] = Math.max(u[3], bl.y1 + pad);
+            grew = true;
+          }
+        }
         if ((r[2] - r[0]) * (r[3] - r[1]) > 1.6 * (u[2] - u[0]) * (u[3] - u[1])) {
           const cut = [Math.max(r[0], Math.round(u[0])), Math.max(r[1], Math.round(u[1])), Math.min(r[2], Math.round(u[2])), Math.min(r[3], Math.round(u[3]))];
           const keep = (used || []).filter((bl) => bl.x0 >= cut[0] && bl.x1 < cut[2] && bl.y0 >= cut[1] && bl.y1 < cut[3]);
@@ -377,8 +468,10 @@ function fitBubbles(px, bubbles, anchor = true) {
     // report: white block spilling over the sky around an oval bubble) must shrink to the text, and the
     // interior pass below then widens it only as far as the bubble really goes.
     for (const bl of touching) bl.used = true;
+    // join distance grows with the lettering: a shout's line gap is wider than the fixed one, and the last
+    // line was left unerased under its translation (live GPT 66dcdbac/10: "YOU." under "I'LL KILL")
     const r = grow(letters, Math.min(...touching.map((bl) => bl.x0)), Math.min(...touching.map((bl) => bl.y0)),
-      Math.max(...touching.map((bl) => bl.x1 + 1)), Math.max(...touching.map((bl) => bl.y1 + 1)));
+      Math.max(...touching.map((bl) => bl.x1 + 1)), Math.max(...touching.map((bl) => bl.y1 + 1)), Math.max(G, Math.round(0.9 * letterH)));
     // runaway guard: a fit more than 2x the model's box means we followed artwork, not letters
     if ((r[2] - r[0]) * (r[3] - r[1]) > 2 * (bx1 - bx0) * (by1 - by0)) { const s = shrink(); return s ? kept(s, 'shrink') : { b: { ...b, ...style, fit: 'kept' } }; }
     return kept(r, 'letters', letters.filter((bl) => bl.used));
@@ -412,7 +505,19 @@ function fitBubbles(px, bubbles, anchor = true) {
       // asked to box EVERY line of such text, the letters found may miss a line in the art (live Sangeki
       // run: "O LE ESTÁ" left above a white-on-black caption), so take both, plus about half a line of margin.
       const [mx0, my0, mx1, my1] = boxes[k];
-      if ((mx1 - mx0) * (my1 - my0) <= 3 * (x1 - x0) * (y1 - y0)) { x0 = Math.min(x0, mx0); y0 = Math.min(y0, my0); x1 = Math.max(x1, mx1); y1 = Math.max(y1, my1); }
+      // The model's box and a detected block of lettering agree (most of the block inside the box, box at most
+      // ~2.5x the block): that pair is the text. The letter growth followed the hatching around it and the
+      // white block reached a face (live GPT 66dcdbac/9: block 19x7%, drawn 26.5x13.6%).
+      const pxOf = (t) => [t.x * W / 100, t.y * H / 100, (t.x + t.w) * W / 100, (t.y + t.h) * H / 100];
+      const agree = blocks.filter((t) => !t.faded && t.n >= 6).map(pxOf).filter(([a, c, e, g]) => {
+        const ix = Math.min(e, mx1) - Math.max(a, mx0), iy = Math.min(g, my1) - Math.max(c, my0);
+        return ix > 0 && iy > 0 && ix * iy >= 0.6 * (e - a) * (g - c);
+      });
+      const ba = agree.reduce((s, [a, c, e, g]) => s + (e - a) * (g - c), 0);
+      if (agree.length && (mx1 - mx0) * (my1 - my0) <= 2.5 * ba) {
+        x0 = Math.min(mx0, ...agree.map((t) => t[0])); y0 = Math.min(my0, ...agree.map((t) => t[1]));
+        x1 = Math.max(mx1, ...agree.map((t) => t[2])); y1 = Math.max(my1, ...agree.map((t) => t[3]));
+      } else if ((mx1 - mx0) * (my1 - my0) <= 3 * (x1 - x0) * (y1 - y0)) { x0 = Math.min(x0, mx0); y0 = Math.min(y0, my0); x1 = Math.max(x1, mx1); y1 = Math.max(y1, my1); }
       const line = Math.max(4, (f.lh || 1.5) / 100 * H * 1.25);
       x0 = Math.max(0, Math.round(x0 - line * 0.5)); x1 = Math.min(W, Math.round(x1 + line * 0.5));
       y0 = Math.max(0, Math.round(y0 - line * 0.6)); y1 = Math.min(H, Math.round(y1 + line * 0.6));
@@ -486,10 +591,13 @@ function anchorToText(px, out) {
   // white lettering on a black/dark-toned caption: the letter finder can't confirm it, yet the model's
   // spot is right - moving it to the nearest free block put it on another bubble (live Sangeki run)
   const darkLum = (b) => { const m = /(\d+),\s*(\d+),\s*(\d+)/.exec(b.bg || ''); return m ? 0.299 * m[1] + 0.587 * m[2] + 0.114 * m[3] : 255; };
-  const stays = out.filter((b) => b.fit === 'kept' && darkLum(b) < 60);
+  // an SFX/art line is drawn on the art, never moved onto a free block of lettering (those are speech): GPT's
+  // right spot for "ぇぇぇ…" was swapped for a block on a boy's face (live 822342aa/7)
+  const fixedKind = (b) => b.kind === 'sfx' || b.kind === 'art';
+  const stays = out.filter((b) => b.fit === 'kept' && (darkLum(b) < 60 || fixedKind(b)));
   good = good.concat(stays);
-  const kept = out.filter((b) => b.fit === 'kept' && darkLum(b) >= 60).concat(good.filter(stray));
-  good = good.filter((b) => !stray(b));
+  const kept = out.filter((b) => b.fit === 'kept' && darkLum(b) >= 60 && !fixedKind(b)).concat(good.filter((b) => stray(b) && !fixedKind(b)));
+  good = good.filter((b) => !stray(b) || fixedKind(b));
   if (!kept.length) return good;
   const free = blocks.filter((t) => !good.some((b) => covers(t, b)));
   const c = (b) => [b.x + b.w / 2, b.y + b.h / 2];
@@ -662,7 +770,7 @@ function trimOverlaps(list) {
     if (ix <= 0 || iy <= 0) continue;
     // a blind box (no source letters under it) lying on another box's bubble was put there by mistake: it
     // can't be shown right there, so it goes (the missed-text pass re-reads any lettering left uncovered)
-    if (b.fit === 'kept' && a.fit !== 'kept' && ix * iy >= 0.3 * b.w * b.h) { b.drop = true; continue; }
+    if (b.fit === 'kept' && a.fit !== 'kept' && b.kind !== 'art' && b.kind !== 'box' && ix * iy >= 0.3 * b.w * b.h) { b.drop = true; continue; }
     const cut = [ // b trimmed so it ends where a begins, or starts where a ends
       { x: b.x, y: b.y, w: a.x - b.x, h: b.h }, { x: a.x + a.w, y: b.y, w: b.x + b.w - (a.x + a.w), h: b.h },
       { x: b.x, y: b.y, w: b.w, h: a.y - b.y }, { x: b.x, y: a.y + a.h, w: b.w, h: b.y + b.h - (a.y + a.h) },
@@ -796,14 +904,21 @@ function cleanPatchRaw(px, b) {
       if (nx >= 0 && ny >= 0 && nx < w && ny < h && !mask[ny * w + nx]) { mask[ny * w + nx] = 1; n++; }
     }
   }
-  const faint = (i) => Math.abs(out[i] - bg[0]) + Math.abs(out[i + 1] - bg[1]) + Math.abs(out[i + 2] - bg[2]) >= 24;
-  const halo = [];
-  for (let p = 0; p < w * h; p++) {
-    if (mask[p] || !faint(p * 4) || (label[p] && !keep[label[p]])) continue;
-    const x = p % w, y = (p / w) | 0;
-    if ((x > 0 && mask[p - 1]) || (x < w - 1 && mask[p + 1]) || (y > 0 && mask[p - w]) || (y < h - 1 && mask[p + w])) halo.push(p);
+  // On light paper the JPEG's soft letter edges run wider than one ring: a pale outline of every erased letter
+  // stayed visible (live GPT 66dcdbac/8, a bubble erased stroke by stroke). Four rings, a lower threshold;
+  // never into other ink (outline, art), which stays in its own blobs.
+  const light = 0.299 * bg[0] + 0.587 * bg[1] + 0.114 * bg[2] > 200;
+  const faint = (i) => Math.abs(out[i] - bg[0]) + Math.abs(out[i + 1] - bg[1]) + Math.abs(out[i + 2] - bg[2]) >= (light ? 9 : 24);
+  for (let ring = 0; ring < (light ? 4 : 1); ring++) {
+    const halo = [];
+    for (let p = 0; p < w * h; p++) {
+      if (mask[p] || !faint(p * 4) || (label[p] && !keep[label[p]])) continue;
+      const x = p % w, y = (p / w) | 0;
+      if ((x > 0 && mask[p - 1]) || (x < w - 1 && mask[p + 1]) || (y > 0 && mask[p - w]) || (y < h - 1 && mask[p + w])) halo.push(p);
+    }
+    if (!halo.length) break;
+    for (const p of halo) { mask[p] = 1; n++; }
   }
-  for (const p of halo) { mask[p] = 1; n++; }
   if (!n || n > 0.85 * w * h) return null; // nothing to erase, or the "letters" are the whole region
   // Self-check: most of the ink in the box must be the letters we lift. On textured art the strokes fuse
   // with the hatching at the box edge and stay; the box would then turn transparent over the original
@@ -1065,7 +1180,18 @@ function ellipseLines(text, measure, boxW, boxH, lineH) {
       lines.push(cur); row++; cur = wd;
       if (measure(cur) > widths[row]) { ok = false; break; }
     }
-    if (ok && cur) { lines.push(cur); return lines; }
+    if (ok && cur) {
+      lines.push(cur);
+      // a letterer never leaves one lone syllable on the last line ("…không nhận / ra"): pull the previous
+      // line's last word down when the last row has room for both
+      const last = lines.length - 1;
+      if (last >= 1 && !/\s/.test(lines[last])) {
+        const prev = lines[last - 1].split(' ');
+        const down = prev[prev.length - 1] + ' ' + lines[last];
+        if (prev.length >= 3 && measure(down) <= widths[last]) { prev.pop(); lines[last - 1] = prev.join(' '); lines[last] = down; }
+      }
+      return lines;
+    }
   }
   return null;
 }

@@ -29,6 +29,9 @@ let n = 0;
   // Bug 1: "Reset after" in any case and wording
   assert.equal(reset('Quota exceeded. Reset after 1m 50s'), 110);
   assert.equal(reset('quota exceeded. retry after 30s'), 30);
+  // Groq per-minute cap without a countdown: wait the minute out (live: every polish of a page failed)
+  assert.equal(reset('Request too large for model `qwen/qwen3.8-27b` on output tokens per minute (OTPM): Limit 1000, Requested 1260.'), 60);
+  assert.equal(reset('500 internal error'), 0);
   console.log('quota wording OK');
 
   // Bug 2: a quota that never clears costs the api() sleeps once, not again per queue retry
@@ -136,6 +139,12 @@ let n = 0;
     m = await load('t/merge');
     assert.equal(m.glossary.split('\n').length, 2, 'same pair replaced, header dropped: ' + m.glossary);
     assert.ok(/anh hai/.test(m.glossary) && /anh trai Mio/.test(m.chars));
+    // a name learnt later replaces the generic role (live 66dcdbac/10: "Thầy giáo" -> "Akasumi Goro (thầy giáo)")
+    await learn('t/alias', { glossary: 'Ninose Ema ↔ thầy giáo (cựu học sinh ↔ thầy): Ema xưng em gọi thầy', chars: 'Ninose Ema: nữ, 25\nThầy giáo: nam, từng dạy Ema' },
+      null, [], 'Akasumi Goro (thầy giáo): nam, 23 tuổi trong hồi tưởng');
+    m = await load('t/alias');
+    assert.ok(/^Ninose Ema ↔ Akasumi Goro \(cựu học sinh ↔ thầy\): Ema xưng em/.test(m.glossary), 'pair renamed: ' + m.glossary);
+    assert.ok(!/^Thầy giáo:/m.test(m.chars) && /Akasumi Goro \(thầy giáo\)/.test(m.chars) && /Ninose Ema: nữ/.test(m.chars), 'generic row replaced: ' + m.chars);
   }
   console.log('memory merge OK');
   // a series memory saved without a name gets it from any page of the series, cached ones included

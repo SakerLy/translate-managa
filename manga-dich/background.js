@@ -154,6 +154,12 @@ Ví dụ cứng → tự nhiên (chung):
 "Nếu bạn không phiền, tôi sẽ giúp bạn như một lời cảm ơn." → "Không phiền thì để tớ giúp, coi như trả ơn nhé."
 "Có vẻ như anh ấy đã quên mất cuộc hẹn của chúng tôi." (nghĩ thầm) → "Chắc lại quên béng vụ hẹn rồi..."
 "Yoroshiku onegaishimasu" (hai bạn mới quen) → "Từ giờ mong cậu chỉ bảo nhiều nhé!"
+Biên tập như editor/typesetter nhóm dịch chuyên nghiệp (chữ phải vừa bong bóng gốc, không được tràn):
+- ĐỘ DÀI: tiếng Việt vốn dài hơn tiếng Anh/Nhật, mà bong bóng không to ra. Mỗi câu KHÔNG dài hơn bản nháp; bong bóng gốc ít chữ (1-3 từ) thì bản dịch cũng 1-4 từ. Rút gọn bằng cách bỏ chủ ngữ đã rõ, bỏ từ đệm, chọn từ ngắn hơn ("không biết" → "chả biết" khi hợp giọng) - không bỏ ý.
+- TÊN PHIÊN ÂM: tên viết bằng katakana/hiragana là TÊN, phiên âm sang chữ Latin (クーガー → Kuuga, アストレア → Astrea), KHÔNG đổi thành một từ tiếng Anh có nghĩa trùng âm ("Cougar", "Rose"…). Bản scan đã viết tên bằng chữ Latin thì giữ đúng cách viết đó.
+- DẤU CÂU kiểu sách Việt: "…" cho ngập ngừng (không "....." dài), "?!" cho hỏi-gắt; không cách trước "! ? … ,"; câu bị ngắt giữa chừng kết bằng "—"; tối đa hai dấu "!!".
+- SFX (mục có "sfx" hoặc src là từ tượng thanh): 1-3 âm tiết tượng thanh tiếng Việt ("ドキドキ" → "Thình thịch", "バン" → "Rầm!", "ぽろぽろ" → "Lã chã", "しくしく" → "Thút thít"), không viết câu mô tả.
+- Bong bóng nghĩ thầm và lời dẫn: câu gọn, không chủ ngữ thừa; thoại hét (style big/shout) ngắn và có lực.
 Trả về DUY NHẤT một khối JSON, không thêm chữ nào trước/sau:
 {"lines": ["câu đã viết lại 1", "câu đã viết lại 2"], "glossary": "bảng xưng hô sau trang này", "names": ["田中 → Tanaka"], "chars": "danh sách nhân vật sau trang này"}
 "lines" phải đủ đúng số mục nhận được, cùng thứ tự. Không có cặp xưng hô mới thì "glossary" = bảng cũ nguyên văn.
@@ -228,6 +234,9 @@ function resetSeconds(msg) {
     return s > 0 && s <= 300 ? s : 0;
   }
   const t = TRY_AGAIN.exec(String(msg));
+  // a per-minute cap with no countdown (Groq: "Request too large … on output tokens per minute (OTPM)"): the
+  // 5s/10s retries all landed in the same minute and the page lost its polish every time
+  if ((!t || (!t[1] && !t[2])) && /per minute|\b[OR]?TPM\b|\bRPM\b/i.test(String(msg))) return 60;
   if (!t || (!t[1] && !t[2])) return 0;
   const s = Math.ceil((+(t[1] || 0)) * 60 + (t[3] === 'ms' ? +(t[2] || 0) / 1000 : +(t[2] || 0)));
   return s > 0 && s <= 300 ? Math.max(1, s) : 0;
@@ -676,9 +685,23 @@ async function learnFromPage(site, mem, glossary, found, chars = '') {
   // same pair is replaced by the newer one (key = "A ↔ B", before ":" or "("). Section headers the model
   // echoes back ("BẢNG XƯNG HÔ:", "NHÂN VẬT …") are not pairs.
   const header = /^(BẢNG XƯNG HÔ|TÊN RIÊNG|GHI CHÚ|NHÂN VẬT|BẠN ĐỌC|Lời thoại)/i;
-  const rowsOf = (t) => String(t || '').split('\n').map((l) => l.trim().replace(/^[-•*]\s*/, '')).filter((l) => l && !header.test(l));
+  const rowsOf = (t) => String(t || '').split('\n').map((l) => l.trim().replace(/^[-•*]\s*/, '').replace(/\s{2,}/g, ' ')).filter((l) => l && !header.test(l));
+  // A name learnt later: the model writes "Akasumi Goro (thầy giáo): …" once the teacher is named. The old
+  // "Thầy giáo" character row goes, and pairs keyed on "thầy giáo" are renamed - the table kept saying "thầy
+  // giáo" beside a new "Akasumi Goro" row (live MangaDex run, looked like memory not updating).
+  const alias = new Map();
+  for (const r of rowsOf(chars)) {
+    const m = /^([^:(]+?)\s*\(([^)]+)\)\s*:/.exec(r);
+    if (m && m[2].trim().toLowerCase() !== m[1].trim().toLowerCase()) alias.set(m[2].trim().toLowerCase(), m[1].trim());
+  }
+  const renamed = (r) => {
+    const cut = r.search(/[:(]/), head = cut < 0 ? r : r.slice(0, cut);
+    let h = head;
+    for (const [a, name] of alias) h = h.split(/\s*↔\s*/).map((p) => (p.trim().toLowerCase() === a ? name : p.trim())).join(' ↔ ');
+    return h === head.trim() ? r : h + (cut < 0 ? '' : ' ' + r.slice(cut));
+  };
   const byHead = new Map();
-  for (const r of [...rowsOf(mem.glossary), ...rowsOf(glossary)]) byHead.set(r.split(/[:(]/)[0].trim().toLowerCase(), r);
+  for (const r of [...rowsOf(mem.glossary), ...rowsOf(glossary)].map(renamed)) byHead.set(r.split(/[:(]/)[0].trim().toLowerCase(), r);
   next.glossary = [...byHead.values()].join('\n').slice(-MEM_MAX);
   // names: the polish pass lists real proper names ("田中 → Tanaka"). A regex over src used to do
   // this and stored every capitalised word: an all-caps Spanish/English scan put "BUENO", "AHORA"…
@@ -689,7 +712,8 @@ async function learnFromPage(site, mem, glossary, found, chars = '') {
   // characters: one line per person, merged the same way (key = the name before ":")
   if (chars) {
     const byName = new Map();
-    for (const r of [...rowsOf(mem.chars), ...rowsOf(chars)]) byName.set(r.split(':')[0].trim().toLowerCase(), r);
+    for (const r of rowsOf(mem.chars)) if (!alias.has(r.split(/[:(]/)[0].trim().toLowerCase())) byName.set(r.split(':')[0].trim().toLowerCase(), r);
+    for (const r of rowsOf(chars)) byName.set(r.split(':')[0].trim().toLowerCase(), r);
     next.chars = [...byName.values()].join('\n').slice(-2000);
   }
   await saveMem(site, next);
@@ -793,7 +817,9 @@ async function run(item) {
       // the read pass worked, only the polish kept failing: its lines beat an error page (not cached as
       // final, so the next visit polishes them - still without resending the image)
       const d = job.draftKey && (await chrome.storage.local.get(job.draftKey).catch(() => ({})))[job.draftKey];
-      w?.forEach((f) => f.resolve(d ? { bubbles: d.bubbles, glossary: job.glossary, unpolished: true } : { error: String(e.message || e) }));
+      // the reason travels with it: the page tells the reader this page taught the AI nothing (it looked like
+      // "memory never updates" - live Groq run: every polish hit the tokens-per-minute cap, silently)
+      w?.forEach((f) => f.resolve(d ? { bubbles: d.bubbles, glossary: job.glossary, unpolished: true, reason: String(e.message || e).slice(0, 160) } : { error: String(e.message || e) }));
     }
   } finally {
     pump();

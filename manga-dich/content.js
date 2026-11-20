@@ -19,6 +19,7 @@
 
   const overlays = [];
   const texts = new WeakMap(); // img -> its translated lines, used as the next page's context
+  const shownWhy = new Set(); // polish-failure reasons already told to the reader
   let active = 0;
   const srcOf = (img) => img.currentSrc || img.src;
   // Memory key: the series being read (series.js), re-read on every page because readers like MangaDex
@@ -55,7 +56,10 @@
       font-family:var(--md-font);font-weight:600;line-height:1.15;white-space:normal;text-wrap:balance;overflow-wrap:normal;word-break:normal}
     .md-b.shaped{white-space:pre;text-wrap:nowrap}
     .md-b.clean{background:transparent!important;box-shadow:none!important}
-    .md-b.clean.k-art,.md-b.clean.k-sfx{text-shadow:0 0 2px var(--md-bg),0 0 2px var(--md-bg),0 0 3px var(--md-bg),0 0 4px var(--md-bg)}
+    /* an SFX that could not be erased is a note beside its art, never a block over it (live GPT 822342aa/7: white
+       blocks over a face and a cheek) - outlined text on no background */
+    .md-b.k-sfx:not(.clean){background:transparent!important;box-shadow:none!important}
+    .md-b.k-sfx,.md-b.clean.k-art{text-shadow:0 0 2px var(--md-bg),0 0 2px var(--md-bg),0 0 3px var(--md-bg),0 0 4px var(--md-bg)}
     .md-b.editing{outline:2px solid #ff6740;cursor:text;background:#fffffff2!important;color:#111!important;text-shadow:none!important}
     .md-b.off{opacity:.08}
     .md-b{touch-action:none;user-select:none}
@@ -186,9 +190,13 @@
     if (src && best < src * 0.9 && !b.dataset.grown && b.dataset.box) {
       const [x, y, w, h] = JSON.parse(b.dataset.box);
       const w2 = Math.min(100, w * 1.3), h2 = Math.min(100, h * 1.2);
+      const nx = Math.max(0, Math.min(100 - w2, x - (w2 - w) / 2)), ny = Math.max(0, Math.min(100 - h2, y - (h2 - h) / 2));
       b.dataset.grown = '1';
-      setBox(b, Math.max(0, Math.min(100 - w2, x - (w2 - w) / 2)), Math.max(0, Math.min(100 - h2, y - (h2 - h) / 2)), w2, h2);
-      search(b, lo, hi);
+      // never grow into another translation: two narration lines a step apart were drawn over each other
+      // (live GPT b480d7dd/5)
+      const hits = (q) => nx < q[0] + q[2] && q[0] < nx + w2 && ny < q[1] + q[3] && q[1] < ny + h2;
+      const others = [...(b.parentElement?.querySelectorAll('.md-b') || [])].filter((o) => o !== b && o.dataset.box).map((o) => JSON.parse(o.dataset.box));
+      if (!others.some(hits)) { setBox(b, nx, ny, w2, h2); search(b, lo, hi); }
     }
   };
 
@@ -212,8 +220,12 @@
   const grow = (b, k) => {
     const [x, y, w, h] = JSON.parse(b.dataset.box || '[0,0,0,0]');
     const n = (+b.dataset.grownK || 1) * k, w2 = Math.min(100, w * n), h2 = Math.min(100, h * Math.sqrt(n));
+    const nx = Math.max(0, Math.min(100 - w2, x - (w2 - w) / 2)), ny = Math.max(0, Math.min(100 - h2, y - (h2 - h) / 2));
+    // not into another translation (same rule as fit()'s one-time widening)
+    const others = [...(b.parentElement?.querySelectorAll('.md-b') || [])].filter((o) => o !== b && o.dataset.box).map((o) => JSON.parse(o.dataset.box));
+    if (others.some((q) => nx < q[0] + q[2] && q[0] < nx + w2 && ny < q[1] + q[3] && q[1] < ny + h2)) return;
     b.dataset.grownK = n;
-    setBox(b, Math.max(0, Math.min(100 - w2, x - (w2 - w) / 2)), Math.max(0, Math.min(100 - h2, y - (h2 - h) / 2)), w2, h2);
+    setBox(b, nx, ny, w2, h2);
   };
   const harmonize = (el) => {
     const plain = [...el.querySelectorAll('.md-b')].filter((b) => !b.dataset.style || b.dataset.style === 'narration');
@@ -443,7 +455,7 @@
         // Erase the source lettering itself (cleanPatch, fit.js) instead of covering it with a block: the
         // translation then sits on clean paper / continued screentone, like a real scanlation. Boxes the
         // pixels couldn't verify (kept) still get the coloured block.
-        let patch = null;
+        let patch = null, solid = null; // solid: the area a half-erased line covers with a panel instead
         const mine = o.moves?.[lineKey(t.text)]; // where the reader put this line (drag), kept across reloads
         if (mine) {
           Object.assign(b.style, { left: mine[0] + '%', top: mine[1] + '%', width: mine[2] + '%', height: mine[3] + '%' });
@@ -470,7 +482,30 @@
                 const x0 = Math.min(er.x, k.x), y0 = Math.min(er.y, k.y);
                 er = { ...er, x: x0, y: y0, w: Math.max(er.x + er.w, k.x + k.w) - x0, h: Math.max(er.y + er.h, k.y + k.h) - y0 };
               }
-              const c = cleanPatch(o.px, er);
+              let c = cleanPatch(o.px, er);
+              // Erase check, as an editor would look at it: if much of the original lettering under this line is
+              // still showing (a decorated title logo only half lifted, live aa77c143/4 - the translation sat on
+              // top of the leftover kanji), drop the patch and set the line on a solid panel over the whole
+              // lettering. Boxes and bubbles only: on the art a solid panel would hide the drawing.
+              if (c && (t.kind === 'box' || t.kind === 'bubble') && t.core) {
+                const W = o.px.width, H = o.px.height, d = o.px.data, m = /(\d+),\s*(\d+),\s*(\d+)/.exec(t.bg || '');
+                const bg = m ? [+m[1], +m[2], +m[3]] : [255, 255, 255];
+                // a caption/logo box is judged over its whole erase area (the fit's letters were only part of a
+                // decorated logo, the kanji above them stayed); a bubble over its letters (its outline is in the area)
+                const [cx, cy, cw, ch] = t.kind === 'box' ? [er.x, er.y, er.w, er.h] : t.core, px0 = c.x / 100 * W, py0 = c.y / 100 * H;
+                let ink = 0, left = 0;
+                for (let y = Math.floor(cy / 100 * H); y < (cy + ch) / 100 * H; y += 2) for (let x = Math.floor(cx / 100 * W); x < (cx + cw) / 100 * W; x += 2) {
+                  const i = (y * W + x) * 4;
+                  if (Math.abs(d[i] - bg[0]) + Math.abs(d[i + 1] - bg[1]) + Math.abs(d[i + 2] - bg[2]) < 150) continue;
+                  ink++;
+                  const qx = Math.floor((x - px0) * c.pw / (c.w / 100 * W)), qy = Math.floor((y - py0) * c.ph / (c.h / 100 * H));
+                  if (qx < 0 || qy < 0 || qx >= c.pw || qy >= c.ph || !c.data[(qy * c.pw + qx) * 4 + 3]) left++;
+                }
+                // light panels only: a box GPT misplaced onto a black suit became a black slab over the character
+                const light = 0.299 * bg[0] + 0.587 * bg[1] + 0.114 * bg[2] > 200;
+                // measured live: bubbles leave 0-1% of their lettering, the half-lifted logo 15%, a subtitle 44%
+                if (light && ink > 40 && left > (t.kind === 'box' ? 0.1 : 0.3) * ink) { c = null; solid = er; }
+              }
               if (c) {
                 patch = document.createElement('canvas');
                 patch.className = 'md-patch';
@@ -495,7 +530,23 @@
           // Not erased: an opaque block. Over the whole box it spilled past the bubble's outline onto the art
           // (live reports), because the box was widened into the bubble or came bigger from the model. The
           // lettering's own extent is inside the bubble: the block covers that, a little margin around it.
-          if (!patch && t.core && t.fit !== 'kept' && !b.dataset.user) {
+          if (solid && !b.dataset.user) {
+            const mx = Math.min(1, solid.w * 0.03), my = Math.min(0.8, solid.h * 0.05);
+            let x0 = Math.max(0, solid.x - mx), y0 = Math.max(0, solid.y - my), x1 = Math.min(100, solid.x + solid.w + mx), y1 = Math.min(100, solid.y + solid.h + my);
+            // the panel stops where a neighbouring translation starts (the title's panel covered half the subtitle
+            // beside it, live aa77c143/4): trim the side facing it
+            for (const u of separated) {
+              if (u === t || u.x >= x1 || u.x + u.w <= x0 || u.y >= y1 || u.y + u.h <= y0) continue;
+              const ucx = u.x + u.w / 2, ucy = u.y + u.h / 2, scx = (x0 + x1) / 2, scy = (y0 + y1) / 2;
+              if (Math.abs(ucx - scx) / (x1 - x0) >= Math.abs(ucy - scy) / (y1 - y0)) { if (ucx > scx) x1 = Math.min(x1, u.x); else x0 = Math.max(x0, u.x + u.w); }
+              else if (ucy > scy) y1 = Math.min(y1, u.y); else y0 = Math.max(y0, u.y + u.h);
+            }
+            const nx = x0, ny = y0, nw = Math.max(1, x1 - x0), nh = Math.max(1, y1 - y0);
+            Object.assign(b.style, { left: nx + '%', top: ny + '%', width: nw + '%', height: nh + '%' });
+            b.dataset.box = JSON.stringify([nx, ny, nw, nh]); b.dataset.ar = nw / nh;
+            delete b.dataset.limit;
+          }
+          if (!patch && !solid && t.core && t.fit !== 'kept' && !b.dataset.user) {
             const [cx, cy, cw, ch] = t.core, px2 = Math.min(1.2, cw * 0.06), py2 = Math.min(1, ch * 0.08);
             const nx = cx - px2, ny = cy - py2, nw = cw + 2 * px2, nh = ch + 2 * py2;
             if (nw * nh < 0.85 * t.w * t.h) {
@@ -508,7 +559,7 @@
           // A shout drawn on the art that can't be erased (its letters touch the drawing - live 66dcdbac/9: a
           // vertical "AARGHHH!!" fused with a white face) became a black block over the face. A band across its
           // middle carries the translation; the source shout stays visible above and below, like an SFX note.
-          if (!patch && t.kind === 'art' && (t.style === 'shout' || t.sfx) && !b.dataset.user && t.h > 8) {
+          if (!patch && t.kind === 'art' && (t.style === 'shout' || t.style === 'big' || t.sfx) && !b.dataset.user && t.h > 8) { // GPT tags it "big"
             const [bx, by, bw, bh] = JSON.parse(b.dataset.box), nh = Math.max(6, bh * 0.28), ny = by + (bh - nh) / 2;
             Object.assign(b.style, { top: ny + '%', height: nh + '%' });
             b.dataset.box = JSON.stringify([bx, ny, bw, nh]);
@@ -665,6 +716,12 @@
       o.key = res.key;
       o.moves = res.moves || {};
       if (res.glossary) window.__md.glossary = res.glossary; // pronoun pairs agreed so far, shared by later pages
+      // the polish pass kept failing: the draft is shown and the AI learnt nothing from this page - say so,
+      // once per kind of error (a reopen polishes it again without resending the image)
+      if (res.unpolished && !shownWhy.has(res.reason)) {
+        shownWhy.add(res.reason);
+        toast(`Chưa trau chuốt được trang này nên AI chưa học xưng hô/tên từ nó (${res.reason || 'lỗi model'}). Mở lại trang để thử lại - ảnh không bị gửi lại.`);
+      }
       // snap boxes to the real bubbles and take their colours (fit.js, injected before this file)
       if (px && typeof fitBubbles === 'function') res.bubbles = fitBubbles(px, res.bubbles);
       draw(res.bubbles);
