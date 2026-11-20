@@ -4,7 +4,7 @@ Mọi thay đổi đáng chú ý của Manga Dịch. Định dạng theo [Keep a
 
 **Quy ước phát hành:** thay đổi mới được gom vào mục "Chưa phát hành". Chỉ khi chủ dự án đã test và đồng ý thì mới chốt số phiên bản và đẩy lên. Trong lúc chờ, popup và trang cài đặt hiện số phiên bản kèm `-beta`.
 
-Lịch sử git có các commit mang tên "ver 0.6.0" … "ver 0.8.0" (19–20/11/2026). Đó là các bản tạm, chưa được test và chưa từng được phát hành; toàn bộ nội dung của chúng nằm trong mục dưới đây.
+Các bản tạm "ver 0.6.0" … "ver 0.8.0" (19–20/11/2026) chưa được test và chưa từng được phát hành; chúng đã được gộp thành một commit "0.6.0-beta", nội dung nằm trong mục dưới đây.
 
 ## [Chưa phát hành] - dự kiến 0.6.0
 

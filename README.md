@@ -269,18 +269,23 @@ manga-dich/                   thư mục extension (Load unpacked thư mục nà
 ├── popup.html / popup.js     Popup gọn: Dịch trang này, tự dịch theo site, công tắc nhanh
 ├── options.html / options.js Trang cài đặt (mở trong tab, tự lưu): kết nối AI, model, cách dịch, trí nhớ AI
 └── ui.css                    Giao diện chung (sáng/tối theo trình duyệt)
-test-background.js            Test unit API/nhà cung cấp (không gọi mạng)
-test-v04.js                   Test unit: gộp ô, style, quota, trí nhớ theo site, separate()
-test-v05.js                   Test unit: sửa đảo trục, neo ô, textBlocks, schema strict, prompt manga, huỷ, trí nhớ theo bộ, UI
-test-v07.js                   Test unit: chịu lỗi cổng/model (hết lượt, think-tag, JSON bị cắt, ô chồng, lặp câu, chép lệnh, toạ độ pixel)
-test-pronoun.js               Test thật: xưng hô theo tuổi, giới, quan hệ, vai, mạch thoại (21 tình huống)
-test-v06.js                   Test unit: xoá chữ gốc, xếp dòng dáng bong bóng, chỉ dịch trang chapter, tách ô chồng/bong bóng gộp,
-                              model trau chuốt riêng, học từ bản sửa, dùng lại bản nháp khi lỗi, font
-test-text.js                  Test ngắt dòng + dò trang không chữ
-test-fit.js                   Đo fit.js trên điểm ảnh thật
-test-live.js / test-ab.js     Test thật: dịch 1 trang, chấm vị trí ô theo đáp án; so sánh prompt A/B
-test-probe.js / test-polish.js / test-tokens.js   Test thật bước gọi thử, trau chuốt, đo token
-draw-boxes.py                 Vẽ ô của model (đỏ) và đáp án (xanh) lên ảnh
+tests/
+├── unit/                     Test chạy offline, không gọi mạng (npm test)
+│   ├── providers.test.js     API/nhà cung cấp, danh sách model
+│   ├── merge-memory.test.js  Gộp ô, style, quota, trí nhớ theo site, separate()
+│   ├── placement.test.js     Sửa đảo trục, neo ô, textBlocks, schema, prompt, huỷ, trí nhớ theo bộ, UI
+│   ├── erase-polish.test.js  Xoá chữ gốc, xếp dòng dáng bong bóng, tách bong bóng gộp, trau chuốt, học từ bản sửa
+│   ├── fault-tolerance.test.js  Chịu lỗi cổng/model: hết lượt, think-tag, JSON bị cắt, ô chồng, toạ độ pixel
+│   ├── text.test.js          Ngắt dòng + dò trang không chữ
+│   └── perf.test.js          Bản nháp tới trước bản chốt
+├── live/                     Test gọi API thật (cần key trong .env, tốn phí)
+│   ├── translate-page.js     Dịch 1 trang, chấm vị trí ô theo đáp án
+│   ├── prompt-ab.js          So sánh prompt A/B qua nhiều lần chạy
+│   ├── pronoun.js            Xưng hô theo tuổi, giới, quan hệ, vai, mạch thoại
+│   ├── probe.js / polish.js / tokens.js   Bước gọi thử, trau chuốt, đo token
+│   └── fit-real-page.js      Đo fit.js trên điểm ảnh trang thật
+└── fixtures/                 Đáp án vị trí ô, ảnh tổng hợp (ảnh truyện thật không nằm trong repo)
+tools/                        Script Python vẽ ô/ảnh test (draw-boxes, draw-probe, draw-texted-pages)
 ```
 
 </details>
@@ -293,7 +298,8 @@ draw-boxes.py                 Vẽ ô của model (đỏ) và đáp án (xanh) l
 Cần [Node.js](https://nodejs.org) 18+. Các script `.py` cần Python và Pillow (`pip install pillow`).
 
 ```bash
-node test-background.js && node test-v04.js && node test-v05.js && node test-v06.js && node test-v07.js && node test-text.js
+npm test                                  # mọi test trong tests/unit (không cần key)
+node tests/unit/placement.test.js         # chạy riêng một file
 ```
 
 Test thật cần key trong file `.env` ở thư mục gốc (đã nằm trong `.gitignore`):
@@ -305,13 +311,13 @@ CUSTOM_API_KEY=...                      # cổng trung gian (nhà cung cấp Tù
 CUSTOM_BASE_URL=...                     # Base URL theo tài liệu của cổng
 ```
 
-Ảnh trang truyện dùng để test **không có trong repo** (bản quyền của tác giả và nhóm dịch). Tự lưu trang thành `test-fixtures/page4.png` / `page5.png`. Các file `*.truth.json` khớp trang 4–5, chương 12 của *Bijin de Okane Mochi no Kanojo ga Hoshii to Ittara…* trên MangaDex (768×1087).
+Ảnh trang truyện dùng để test **không có trong repo** (bản quyền của tác giả và nhóm dịch). Tự lưu trang thành `tests/fixtures/page4.png` / `page5.png`. Các file `*.truth.json` khớp trang 4–5, chương 12 của *Bijin de Okane Mochi no Kanojo ga Hoshii to Ittara…* trên MangaDex (768×1087).
 
 ```bash
-node test-live.js test-fixtures/page4.png               # mọi nhà cung cấp có key
-ONLY=custom MODEL_CUSTOM=gpt-6.1-terra node test-live.js test-fixtures/page5.png
-python -c "from PIL import Image; open('page4.rgba','wb').write(Image.open('test-fixtures/page4.png').convert('RGBA').tobytes())"
-node test-fit.js page4.rgba test-fixtures/result-*.json
+node tests/live/translate-page.js tests/fixtures/page4.png               # mọi nhà cung cấp có key
+ONLY=custom MODEL_CUSTOM=gpt-6.1-terra node tests/live/translate-page.js tests/fixtures/page5.png
+python -c "from PIL import Image; open('page4.rgba','wb').write(Image.open('tests/fixtures/page4.png').convert('RGBA').tobytes())"
+node tests/live/fit-real-page.js page4.rgba tests/fixtures/result-*.json
 ```
 
 Một trang **ĐẠT** khi ít nhất 80% bong bóng có ô dịch đặt lên và ít nhất 80% ô dịch nằm đúng một bong bóng.

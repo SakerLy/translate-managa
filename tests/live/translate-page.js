@@ -2,12 +2,13 @@
 //   Keys: env vars or a .env file next to this script (ANTHROPIC_API_KEY=..., OPENAI_API_KEY, GEMINI_API_KEY, OPENROUTER_API_KEY)
 //   Gateway behind "Tùy chỉnh": CUSTOM_API_KEY=... + CUSTOM_BASE_URL=https://gateway.example/v1
 //   Optional: MODEL_GEMINI=gemini-x (etc.) to test one model instead of "newest that works"
-//   node test-live.js [page.png]          (default: test-fixtures/page4.png)
+//   node tests/live/translate-page.js [page.png]          (default: tests/fixtures/page4.png)
 // If <page>.truth.json exists, scores box placement: each bubble must get a translation box whose
 // centre lands on it (recall), and each box must land on some bubble (precision). Both must be >= 80%.
+const ROOT = require('path').join(__dirname, '..', '..'); // repo root: .env, manga-dich/, tests/fixtures/
 const fs = require('fs'), vm = require('vm'), path = require('path');
 
-const envFile = path.join(__dirname, '.env');
+const envFile = path.join(ROOT, '.env');
 if (fs.existsSync(envFile)) {
   for (const line of fs.readFileSync(envFile, 'utf8').split(/\r?\n/)) {
     const m = line.match(/^\s*([A-Z_]+)\s*=\s*(.+?)\s*$/);
@@ -15,7 +16,7 @@ if (fs.existsSync(envFile)) {
   }
 }
 
-const img = (require.main === module && process.argv[2]) || path.join(__dirname, 'test-fixtures/page4.png'); // argv only when run directly
+const img = (require.main === module && process.argv[2]) || path.join(ROOT, 'tests/fixtures/page4.png'); // argv only when run directly
 const page = { data: fs.readFileSync(img).toString('base64'), mime: /\.png$/i.test(img) ? 'image/png' : 'image/jpeg' };
 const truthFile = img.replace(/\.(png|jpe?g)$/i, '.truth.json');
 const truth = fs.existsSync(truthFile) ? JSON.parse(fs.readFileSync(truthFile, 'utf8')) : null;
@@ -26,7 +27,7 @@ const BASE = { custom: process.env.CUSTOM_BASE_URL || '' };
 let listener;
 const ctx = { fetch, btoa, AbortSignal, URL, crypto, TextEncoder, setTimeout, clearTimeout, chrome: { runtime: { onMessage: { addListener: (f) => (listener = f) }, onConnect: { addListener() {} } } } };
 vm.createContext(ctx);
-vm.runInContext(fs.readFileSync(process.env.BG || path.join(__dirname, 'manga-dich/background.js'), 'utf8'), ctx); // BG=other.js to A/B a variant
+vm.runInContext(fs.readFileSync(process.env.BG || path.join(ROOT, 'manga-dich/background.js'), 'utf8'), ctx); // BG=other.js to A/B a variant
 ctx.testImage = async () => page; // Node has no OffscreenCanvas: probe with the real page instead
 const call = (msg) => new Promise((res) => listener(msg, null, res));
 

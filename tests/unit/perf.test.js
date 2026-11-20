@@ -1,5 +1,6 @@
 // Đo hiệu năng pipeline: thời gian tới BẢN NHÁP (bước 1) vs BẢN CHỐT (sau polish)
 // qua code THẬT của background.js với fetch mock có độ trễ giống model thật.
+const ROOT = require('path').join(__dirname, '..', '..'); // repo root: .env, manga-dich/, tests/fixtures/
 const fs = require('fs'), vm = require('vm'), assert = require('assert');
 
 const store = {};
@@ -28,7 +29,7 @@ const ctx = {
   chrome: { runtime: { onMessage: { addListener() {} }, onConnect: { addListener() {} } }, storage: { local } },
 };
 vm.createContext(ctx);
-vm.runInContext(fs.readFileSync(__dirname + '/manga-dich/background.js', 'utf8'), ctx);
+vm.runInContext(fs.readFileSync(ROOT + '/manga-dich/background.js', 'utf8'), ctx);
 
 const translate = vm.runInContext('translate', ctx);
 store.provider = 'openrouter'; store.keys = { openrouter: 'k' }; store.models = { openrouter: 'x' };

@@ -1,13 +1,14 @@
 // Real run: does the polish pass pick the right Vietnamese pronouns from context? Each case is one page of
 // drafts with a known correct pair; checked by regex on the rewritten lines. Needs GEMINI_API_KEY in .env.
-//   node test-pronoun.js [model] [runs]
+//   node tests/live/pronoun.js [model] [runs]
+const ROOT = require('path').join(__dirname, '..', '..'); // repo root: .env, manga-dich/, tests/fixtures/
 const fs = require('fs'), vm = require('vm'), path = require('path');
-for (const l of fs.readFileSync(path.join(__dirname, '.env'), 'utf8').split(/\r?\n/)) { const m = l.match(/^\s*([A-Z_]+)\s*=\s*(.+?)\s*$/); if (m) process.env[m[1]] = m[2]; }
+for (const l of fs.readFileSync(path.join(ROOT, '.env'), 'utf8').split(/\r?\n/)) { const m = l.match(/^\s*([A-Z_]+)\s*=\s*(.+?)\s*$/); if (m) process.env[m[1]] = m[2]; }
 const [MODEL = 'gemini-flash-lite-latest', RUNS = '2'] = process.argv.slice(2);
 const ctx = { fetch, btoa, AbortSignal, URL, crypto, TextEncoder, setTimeout, clearTimeout, console,
   chrome: { runtime: { onMessage: { addListener() {} }, onConnect: { addListener() {} } }, storage: { local: { get: async () => ({}), set: async () => {} } } } };
 vm.createContext(ctx);
-vm.runInContext(fs.readFileSync(path.join(__dirname, 'manga-dich/background.js'), 'utf8'), ctx);
+vm.runInContext(fs.readFileSync(path.join(ROOT, 'manga-dich/background.js'), 'utf8'), ctx);
 const polish = vm.runInContext('polish', ctx);
 // PROVIDER=custom uses CUSTOM_API_KEY + CUSTOM_BASE_URL (a gateway) instead of Gemini
 const PROV = process.env.PROVIDER || 'gemini';

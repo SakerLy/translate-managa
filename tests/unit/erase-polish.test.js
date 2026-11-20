@@ -1,8 +1,9 @@
 // v0.6: erase-and-redraw (cleanPatch), bubble-shaped lines (ellipseLines), separate polish model,
 // learning from the reader's corrections, character list per series.
-//   node test-v06.js
+//   node tests/unit/erase-polish.test.js
+const ROOT = require('path').join(__dirname, '..', '..'); // repo root: .env, manga-dich/, tests/fixtures/
 const fs = require('fs'), vm = require('vm'), assert = require('assert'), path = require('path');
-const R = (f) => fs.readFileSync(path.join(__dirname, f), 'utf8');
+const R = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 const fctx = {}; vm.createContext(fctx);
 vm.runInContext(R('manga-dich/fit.js'), fctx);
 const clean = vm.runInContext('cleanPatch', fctx), shape = vm.runInContext('ellipseLines', fctx);
@@ -230,7 +231,7 @@ console.log('overlap split OK');
   for (const [, id] of R('manga-dich/options.js').matchAll(/\$\('([\w-]+)'\)/g)) assert.ok(h.includes(`id="${id}"`), `options.html has #${id}`);
   const man = JSON.parse(R('manga-dich/manifest.json'));
   assert.ok(man.web_accessible_resources?.[0]?.resources.includes('fonts/*.ttf'), 'font is web accessible');
-  for (const f of ['Mali-SemiBold.ttf', 'Mali-Bold.ttf', 'OFL.txt']) assert.ok(fs.existsSync(path.join(__dirname, 'manga-dich/fonts', f)), f);
+  for (const f of ['Mali-SemiBold.ttf', 'Mali-Bold.ttf', 'OFL.txt']) assert.ok(fs.existsSync(path.join(ROOT, 'manga-dich/fonts', f)), f);
   console.log('UI + font files OK');
   console.log('ALL v0.6 TESTS PASS');
 })().catch((e) => { console.error(e); process.exit(1); });

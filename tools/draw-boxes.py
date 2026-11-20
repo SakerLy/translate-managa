@@ -1,5 +1,5 @@
 # Visual check: draws truth boxes (green) and, if given, model boxes (red, from test-boxes.js JSON) on the page.
-#   python draw-boxes.py test-fixtures/page4.png test-fixtures/page4.truth.json [result.json] out.png
+#   python tools/draw-boxes.py tests/fixtures/page4.png tests/fixtures/page4.truth.json [result.json] out.png
 import json, sys
 from PIL import Image, ImageDraw
 

@@ -1,10 +1,11 @@
 // wrapText: shape-aware line breaking; hasText: textless-page detector.
-//   node test-text.js            - unit cases (no fixtures)
-//   node test-text.js fixtures   - detector over every *.png under test-fixtures/
+//   node tests/unit/text.test.js            - unit cases (no fixtures)
+//   node tests/unit/text.test.js fixtures   - detector over every *.png under tests/fixtures/
 // The synth page's truth file says which pages carry text; page4/page5 are real manga pages.
+const ROOT = require('path').join(__dirname, '..', '..'); // repo root: .env, manga-dich/, tests/fixtures/
 const fs = require('fs'), vm = require('vm'), path = require('path'), assert = require('assert');
 const ctx = {}; vm.createContext(ctx);
-vm.runInContext(fs.readFileSync(path.join(__dirname, 'manga-dich/text.js'), 'utf8'), ctx);
+vm.runInContext(fs.readFileSync(path.join(ROOT, 'manga-dich/text.js'), 'utf8'), ctx);
 const { wrapText, hasText } = vm.runInContext('({ wrapText, hasText })', ctx);
 
 // ---------- wrapText ----------
@@ -124,14 +125,14 @@ if (process.argv[2] === 'fixtures') {
     if (f.endsWith('.png') && fs.existsSync(p.replace(/\.png$/, '.jpg'))) return;
     files.push(p);
   });
-  walk(path.join(__dirname, 'test-fixtures'));
+  walk(path.join(ROOT, 'tests/fixtures'));
   let bad = 0;
   for (const f of files) {
     const expect = !/textless/.test(f); // JPEG variants are the format the extension really sends
     const r = hasText(f.endsWith('.jpg') ? decodeJpeg(f) : decode(f));
     const ok = r.has === expect;
     if (!ok) bad++;
-    console.log(`${r.has ? 'CHỮ  ' : 'trống'} ${ok ? '✓' : '✗'} nhỏ=${String(r.small).padStart(3)}/${String(r.total).padStart(4)}  ${path.relative(__dirname, f)}`);
+    console.log(`${r.has ? 'CHỮ  ' : 'trống'} ${ok ? '✓' : '✗'} nhỏ=${String(r.small).padStart(3)}/${String(r.total).padStart(4)}  ${path.relative(ROOT, f)}`);
   }
   assert.equal(bad, 0, `${bad} trang bị chấm sai`);
   console.log('detector: tất cả trang chấm đúng');

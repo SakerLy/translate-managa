@@ -1,16 +1,17 @@
 // So sánh prompt (A/B) trên trang test có đáp án: chạy một model N lần, chấm recall/precision từng lần
 // rồi báo trung bình - một lần chạy duy nhất là không đủ kết luận vì model trả về hơi khác nhau mỗi lần.
-//   node test-ab.js <model> [số lần chạy, mặc định 3]
+//   node tests/live/prompt-ab.js <model> [số lần chạy, mặc định 3]
 //   BG=path/variant.js để chạy một biến thể background.js (mặc định: manga-dich/background.js)
 //   PROVIDER=custom|gemini|... KEY_ENV=CUSTOM_API_KEY (mặc định theo provider, đọc từ .env)
 //   BASE_URL để chỉ endpoint cho provider custom (mặc định CUSTOM_BASE_URL trong .env)
+const ROOT = require('path').join(__dirname, '..', '..'); // repo root: .env, manga-dich/, tests/fixtures/
 const fs = require('fs'), vm = require('vm'), path = require('path');
-for (const line of fs.readFileSync(path.join(__dirname, '.env'), 'utf8').split(/\r?\n/)) {
+for (const line of fs.readFileSync(path.join(ROOT, '.env'), 'utf8').split(/\r?\n/)) {
   const m = line.match(/^\s*([A-Z_]+)\s*=\s*(.+?)\s*$/); if (m && !process.env[m[1]]) process.env[m[1]] = m[2];
 }
-const img = path.join(__dirname, process.env.PAGE || 'test-fixtures/page4.png');
+const img = path.join(ROOT, process.env.PAGE || 'tests/fixtures/page4.png');
 const page = { data: fs.readFileSync(img).toString('base64'), mime: 'image/png' };
-// chấm theo đáp án của chính trang đó (không dùng score của test-live vì nó gắn với page4)
+// chấm theo đáp án của chính trang đó (không dùng score của translate-page.js vì nó gắn với page4)
 const truth = JSON.parse(fs.readFileSync(img.replace(/\.(png|jpe?g)$/i, '.truth.json'), 'utf8'));
 const score = (bubbles) => {
   const { width: W, height: H } = truth, M = 15; // px tolerance around each truth box
@@ -31,7 +32,7 @@ const base = process.env.BASE_URL || (provider === 'custom' ? process.env.CUSTOM
 let listener;
 const ctx = { fetch, btoa, AbortSignal, URL, chrome: { runtime: { onMessage: { addListener: (f) => (listener = f) }, onConnect: { addListener() {} } } } };
 vm.createContext(ctx);
-vm.runInContext(fs.readFileSync(process.env.BG || path.join(__dirname, 'manga-dich/background.js'), 'utf8'), ctx);
+vm.runInContext(fs.readFileSync(process.env.BG || path.join(ROOT, 'manga-dich/background.js'), 'utf8'), ctx);
 const call = (msg) => new Promise((res) => listener(msg, null, res));
 
 (async () => {

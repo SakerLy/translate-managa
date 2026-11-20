@@ -1,8 +1,9 @@
 // v0.5: placement repair (axis swap, blind boxes re-homed to real text, missed-text finder),
 // strict-schema shape, kinship/genre prompt rules, popup/options/background API handshake.
-//   node test-v05.js
+//   node tests/unit/placement.test.js
+const ROOT = require('path').join(__dirname, '..', '..'); // repo root: .env, manga-dich/, tests/fixtures/
 const fs = require('fs'), vm = require('vm'), assert = require('assert'), path = require('path');
-const R = (f) => fs.readFileSync(path.join(__dirname, f), 'utf8');
+const R = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 
 // ---------- synthetic page: white paper, 3 oval bubbles with "letters" (small black bars) ----------
 const W = 600, H = 900;
@@ -207,7 +208,7 @@ console.log('prompt rules OK');
   const man = JSON.parse(R('manga-dich/manifest.json'));
   assert.equal(man.options_ui.page, 'options.html');
   assert.ok(man.commands['translate-tab'], 'keyboard shortcut declared');
-  for (const f of ['options.html', 'options.js', 'popup.html', 'popup.js', 'ui.css']) assert.ok(fs.existsSync(path.join(__dirname, 'manga-dich', f)), f);
+  for (const f of ['options.html', 'options.js', 'popup.html', 'popup.js', 'ui.css']) assert.ok(fs.existsSync(path.join(ROOT, 'manga-dich', f)), f);
   // every id the scripts look up exists in their page
   for (const [html, js] of [['popup.html', 'popup.js'], ['options.html', 'options.js']]) {
     const h = R('manga-dich/' + html);

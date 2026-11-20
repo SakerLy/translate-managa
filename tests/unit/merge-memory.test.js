@@ -1,6 +1,7 @@
 // v0.4 features: mergeBubbles (khử box trùng), site memory (học tích lũy), quota-reset retry,
 // style hint sống sót qua parse, và separate() chống đè (content.js, chạy bằng vm với DOM giả).
-//   node test-v04.js
+//   node tests/unit/merge-memory.test.js
+const ROOT = require('path').join(__dirname, '..', '..'); // repo root: .env, manga-dich/, tests/fixtures/
 const fs = require('fs'), vm = require('vm'), assert = require('assert');
 
 let store = {}, listener, replies = {};
@@ -16,7 +17,7 @@ const ctx = {
   chrome: { runtime: { onMessage: { addListener: (f) => (listener = f) }, onConnect: { addListener() {} } }, storage: { local } },
 };
 vm.createContext(ctx);
-vm.runInContext(fs.readFileSync(__dirname + '/manga-dich/background.js', 'utf8'), ctx);
+vm.runInContext(fs.readFileSync(ROOT + '/manga-dich/background.js', 'utf8'), ctx);
 const call = (msg) => new Promise((res) => listener(msg, null, res));
 
 (async () => {
@@ -148,7 +149,7 @@ const call = (msg) => new Promise((res) => listener(msg, null, res));
     };
     vm.createContext(cctx);
     // chỉ nạp hàm separate: bọc IIFE rồi expose
-    const src = fs.readFileSync(__dirname + '/manga-dich/content.js', 'utf8');
+    const src = fs.readFileSync(ROOT + '/manga-dich/content.js', 'utf8');
     const fnSrc = src.match(/function separate\(list\) \{[\s\S]*?\n  \}/)[0];
     cctx.__separate = vm.runInContext(`(${fnSrc})`, cctx);
     // 2 box chồng nhau (như ảnh chụp lỗi: giao 35x170) -> tách ra không còn chồng

@@ -1,7 +1,8 @@
 // v0.7.2: fault-tolerance fixes from an external fault-injection report (local Qwen2-VL-2B + mock gateway),
-// each checked on the real background.js.   node test-v07.js
+// each checked on the real background.js.   node tests/unit/fault-tolerance.test.js
+const ROOT = require('path').join(__dirname, '..', '..'); // repo root: .env, manga-dich/, tests/fixtures/
 const fs = require('fs'), vm = require('vm'), assert = require('assert'), path = require('path');
-const R = (f) => fs.readFileSync(path.join(__dirname, f), 'utf8');
+const R = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 
 let listener, reply = null, calls = 0;
 const store = { provider: 'custom', keys: { custom: 'k' }, bases: { custom: 'http://mock' }, models: { custom: 'm' }, polish: false, sfx: true };

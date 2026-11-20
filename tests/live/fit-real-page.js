@@ -1,17 +1,18 @@
 // Measures fit.js on real pixels + real model boxes for page 4 (see README "Chạy test").
-//   python -c "from PIL import Image; open('page4.rgba','wb').write(Image.open('test-fixtures/page4.png').convert('RGBA').tobytes())"
-//   node test-fit.js page4.rgba test-fixtures/result-*.json
+//   python -c "from PIL import Image; open('page4.rgba','wb').write(Image.open('tests/fixtures/page4.png').convert('RGBA').tobytes())"
+//   node tests/live/fit-real-page.js page4.rgba tests/fixtures/result-*.json
 // ink covered: % of dark (text) pixels inside the hand-measured bubbles that end up under a box (higher = better)
 // spill:       % of box area outside the bubbles (+20px margin), i.e. artwork hidden (lower = better)
+const ROOT = require('path').join(__dirname, '..', '..'); // repo root: .env, manga-dich/, tests/fixtures/
 const fs = require('fs'), vm = require('vm'), path = require('path');
 const [argRgba, ...results] = require.main === module ? process.argv.slice(2) : [];
 const rgba = argRgba || process.env.RGBA; // RGBA=path when required from another script
-const truth = JSON.parse(fs.readFileSync(path.join(__dirname, 'test-fixtures/page4.truth.json'), 'utf8'));
+const truth = JSON.parse(fs.readFileSync(path.join(ROOT, 'tests/fixtures/page4.truth.json'), 'utf8'));
 const W = truth.width, H = truth.height;
 const data = new Uint8ClampedArray(fs.readFileSync(rgba));
 if (data.length !== W * H * 4) throw new Error('rgba size does not match page4 (768x1087)');
 const ctx = {}; vm.createContext(ctx);
-vm.runInContext(fs.readFileSync(path.join(__dirname, 'manga-dich/fit.js'), 'utf8'), ctx);
+vm.runInContext(fs.readFileSync(path.join(ROOT, 'manga-dich/fit.js'), 'utf8'), ctx);
 const fit = vm.runInContext('fitBubbles', ctx);
 
 const dark = (x, y) => { const i = (y * W + x) * 4; return 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2] < 100; };

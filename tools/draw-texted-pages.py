@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Vẽ 2 trang test cho detector hasText:
-  test-fixtures/texted-page.png  - trang manga có chữ (bong bóng + chữ dọc + caption + tone)
-  test-fixtures/textless-page.png - trang chỉ có art (panorama nét, screentone, KHÔNG chữ)
+  tests/fixtures/texted-page.png  - trang manga có chữ (bong bóng + chữ dọc + caption + tone)
+  tests/fixtures/textless-page.png - trang chỉ có art (panorama nét, screentone, KHÔNG chữ)
 Đây là "ground truth bằng construction": detector phải nói CHỮ với trang 1, trống với trang 2.
 """
 import math
@@ -45,8 +45,8 @@ for (box, chars) in bubbles:
 # caption khung dẫn truyện (chữ ngang)
 d.rectangle([30, 745, 730, 772], fill=255, outline=15, width=2)
 d.text((40, 748), 'その時、教室のドアがゆっくりと開いた--', font=ImageFont.truetype(FONT, 18), fill=10)
-img.save('test-fixtures/texted-page.png')
-img.convert('RGB').save('test-fixtures/texted-page.jpg', quality=88)
+img.save('tests/fixtures/texted-page.png')
+img.convert('RGB').save('tests/fixtures/texted-page.jpg', quality=88)
 
 # ---------- trang KHÔNG chữ (chỉ art) ----------
 img2 = Image.new('L', (W, H), 255)
@@ -68,6 +68,6 @@ tone(d2, (0, H - 220, W, H), pitch=7)
 # vignette nét chéo góc
 for i in range(40):
     d2.line([0, i * 30, i * 30, 0], fill=60, width=1)
-img2.save('test-fixtures/textless-page.png')
-img2.convert('RGB').save('test-fixtures/textless-page.jpg', quality=88)
+img2.save('tests/fixtures/textless-page.png')
+img2.convert('RGB').save('tests/fixtures/textless-page.jpg', quality=88)
 print('saved texted-page.png + textless-page.png')

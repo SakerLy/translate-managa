@@ -1,8 +1,9 @@
 // Measures real token usage (from the API's own usage report) and box accuracy for one page at several
 // image sizes, through the extension's real background.js request code.
-//   python -c "..." makes resized copies; node test-tokens.js gemini MODEL page.png [page-640.png ...]
+//   python -c "..." makes resized copies; node tests/live/tokens.js gemini MODEL page.png [page-640.png ...]
+const ROOT = require('path').join(__dirname, '..', '..'); // repo root: .env, manga-dich/, tests/fixtures/
 const fs = require('fs'), vm = require('vm'), path = require('path');
-for (const line of fs.readFileSync(path.join(__dirname, '.env'), 'utf8').split(/\r?\n/)) {
+for (const line of fs.readFileSync(path.join(ROOT, '.env'), 'utf8').split(/\r?\n/)) {
   const m = line.match(/^\s*([A-Z_]+)\s*=\s*(.+?)\s*$/); if (m && !process.env[m[1]]) process.env[m[1]] = m[2];
 }
 const [provider, model, ...images] = process.argv.slice(2);
@@ -17,9 +18,9 @@ const ctx = {
   },
 };
 vm.createContext(ctx);
-vm.runInContext(fs.readFileSync(path.join(__dirname, 'manga-dich/background.js'), 'utf8'), ctx);
+vm.runInContext(fs.readFileSync(path.join(ROOT, 'manga-dich/background.js'), 'utf8'), ctx);
 const PROVIDERS = vm.runInContext('PROVIDERS', ctx);
-const { score } = require('./test-live.js');
+const { score } = require('./translate-page.js');
 (async () => {
   for (const img of images) {
     const page = { data: fs.readFileSync(img).toString('base64'), mime: /\.png$/i.test(img) ? 'image/png' : 'image/jpeg' };

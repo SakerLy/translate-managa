@@ -1,4 +1,5 @@
-// Run: node test-background.js  - loads background.js with fake chrome/fetch and checks model lists + parsing.
+// Run: node tests/unit/providers.test.js  - loads background.js with fake chrome/fetch and checks model lists + parsing.
+const ROOT = require('path').join(__dirname, '..', '..'); // repo root: .env, manga-dich/, tests/fixtures/
 const fs = require('fs'), vm = require('vm'), assert = require('assert');
 
 let replies = {}, store = {}, listener, fetches = 0;
@@ -26,7 +27,7 @@ const ctx = {
   },
 };
 vm.createContext(ctx);
-vm.runInContext(fs.readFileSync(__dirname + '/manga-dich/background.js', 'utf8'), ctx);
+vm.runInContext(fs.readFileSync(ROOT + '/manga-dich/background.js', 'utf8'), ctx);
 const call = (msg) => new Promise((res) => listener(msg, null, res));
 
 (async () => {
@@ -69,7 +70,7 @@ const call = (msg) => new Promise((res) => listener(msg, null, res));
 
     // a real gateway's model list (OpenAI shape, no `created`): every provider family
     // must list all of it - before, OpenAI kept only gpt-*, Anthropic returned [], Gemini threw
-    const gw = JSON.parse(fs.readFileSync(__dirname + '/test-fixtures/gateway-models.json', 'utf8'));
+    const gw = JSON.parse(fs.readFileSync(ROOT + '/tests/fixtures/gateway-models.json', 'utf8'));
     const want = gw.data.map((m) => m.id);
     const auth = {};
     ctx.fetch = async (url, init) => { auth[url] = init.headers; return { ok: true, json: async () => gw }; };

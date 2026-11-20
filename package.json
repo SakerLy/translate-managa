@@ -1,0 +1,8 @@
+{
+  "name": "manga-dich",
+  "private": true,
+  "description": "Extension Chrome/Brave dịch manga sang tiếng Việt. Không có dependency; package.json chỉ để chạy test.",
+  "scripts": {
+    "test": "node --test tests/unit/"
+  }
+}

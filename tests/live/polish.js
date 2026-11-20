@@ -1,7 +1,8 @@
 // Real run of the extension's polish() pass on saved draft translations, printing draft vs polished and
-// the API's own token usage.   node test-polish.js gemini MODEL draft1.json [draft2.json ...]
+// the API's own token usage.   node tests/live/polish.js gemini MODEL draft1.json [draft2.json ...]
+const ROOT = require('path').join(__dirname, '..', '..'); // repo root: .env, manga-dich/, tests/fixtures/
 const fs = require('fs'), vm = require('vm'), path = require('path');
-for (const line of fs.readFileSync(path.join(__dirname, '.env'), 'utf8').split(/\r?\n/)) {
+for (const line of fs.readFileSync(path.join(ROOT, '.env'), 'utf8').split(/\r?\n/)) {
   const m = line.match(/^\s*([A-Z_]+)\s*=\s*(.+?)\s*$/); if (m && !process.env[m[1]]) process.env[m[1]] = m[2];
 }
 const [provider, model, ...files] = process.argv.slice(2);
@@ -12,7 +13,7 @@ const ctx = {
   fetch: async (url, init) => { const r = await fetch(url, init); const j = await r.clone().json().catch(() => ({})); usage = j.usageMetadata || j.usage; return r; },
 };
 vm.createContext(ctx);
-vm.runInContext(fs.readFileSync(path.join(__dirname, 'manga-dich/background.js'), 'utf8'), ctx);
+vm.runInContext(fs.readFileSync(path.join(ROOT, 'manga-dich/background.js'), 'utf8'), ctx);
 const polish = vm.runInContext('polish', ctx);
 (async () => {
   for (const f of files) {
