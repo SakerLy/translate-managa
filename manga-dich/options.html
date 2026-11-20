@@ -47,11 +47,12 @@
   .chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px 4px 10px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); font-size: 12.5px; }
   .chip button { border: 0; background: none; color: var(--muted); padding: 0 4px; font-size: 14px; line-height: 1; }
   kbd { font: 600 12px ui-monospace, Consolas, monospace; padding: 2px 6px; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 6px; background: var(--surface); }
+  .ver{font-size:.55em;font-weight:500;opacity:.6;margin-left:4px}
 </style>
 
 <div class="top"><div class="in">
   <div class="logo" aria-hidden="true">MD</div>
-  <div><h1>Manga Dịch</h1><span class="saved" id="saved" role="status">✓ Đã lưu</span></div>
+  <div><h1>Manga Dịch <small class="ver" id="ver"></small></h1><span class="saved" id="saved" role="status">✓ Đã lưu</span></div>
   <nav aria-label="Mục cài đặt"><a href="#ai">Kết nối AI</a><a href="#translate">Cách dịch</a><a href="#memory">Trí nhớ AI</a><a href="#keys">Phím tắt</a></nav>
 </div></div>
 
@@ -100,6 +101,16 @@
     </div>
     <div class="status" id="msg" role="status"></div>
     <div class="models" id="models" hidden></div>
+
+    <div class="field" style="margin-top:16px">
+      <label class="lbl" for="polish-model">Model trau chuốt văn phong <span class="muted" style="font-weight:400;font-size:12px">tuỳ chọn</span></label>
+      <div class="row">
+        <input class="grow" id="polish-model" list="model-list" placeholder="Để trống = dùng chung model ở trên" spellcheck="false" autocomplete="off">
+        <button class="btn" id="test-polish" type="button">Kiểm tra</button>
+      </div>
+      <p class="hint">Lượt trau chuốt chỉ gửi chữ (không gửi ảnh) nên dùng model mạnh vẫn nhanh. Model đọc ảnh nên nhanh, model trau chuốt nên giỏi tiếng Việt: văn phong phụ thuộc chủ yếu vào model này.</p>
+      <div class="status" id="polish-msg" role="status"></div>
+    </div>
   </section>
 
   <section class="card" id="translate" aria-labelledby="h-tr">
@@ -108,10 +119,16 @@
       <span class="txt">Trau chuốt văn phong &amp; xưng hô<small>Thêm 1 lượt gọi chỉ có chữ: viết lại cho tự nhiên, sửa xưng hô anh/em, ông/cháu… cho đúng quan hệ và nhất quán</small></span></label>
     <label class="switch"><input type="checkbox" id="recover"><span class="track" aria-hidden="true"></span>
       <span class="txt">Dịch bù chữ bị sót<small>Tự dò bong bóng còn chữ gốc mà chưa có bản dịch, cắt riêng vùng đó gửi AI dịch lại (tối đa 4 vùng/trang)</small></span></label>
+    <label class="switch"><input type="checkbox" id="mangaFont"><span class="track" aria-hidden="true"></span>
+      <span class="txt">Font truyện tranh<small>Chữ dịch dùng font Mali (nét tay, đủ dấu tiếng Việt) và xếp dòng theo dáng bong bóng; tắt để dùng font hệ thống</small></span></label>
     <label class="switch"><input type="checkbox" id="sfx"><span class="track" aria-hidden="true"></span>
       <span class="txt">Dịch cả SFX (từ tượng thanh)<small>Tắt để chỉ giữ lời thoại</small></span></label>
     <label class="switch"><input type="checkbox" id="textOnly"><span class="track" aria-hidden="true"></span>
       <span class="txt">Bỏ qua trang không có chữ<small>Trang bìa, tranh minh họa: không tốn lượt gọi; có nút “Vẫn dịch” trên trang</small></span></label>
+
+    <label class="field" style="margin-top:14px"><b>Dịch trước</b>
+      <span style="display:flex;align-items:center;gap:8px"><input type="number" id="ahead" min="0" max="10" step="1" style="width:5em"> trang sau trang đang đọc</span>
+      <small class="hint">Đọc tới đâu đã có bản dịch tới đó. 0 = chỉ dịch trang đang hiện trên màn hình (ít tốn lượt gọi nhất); càng lớn càng tốn lượt gọi khi bạn đọc dở rồi bỏ.</small></label>
 
     <div style="margin-top:14px">
       <b>Site tự dịch</b>
@@ -137,6 +154,14 @@
     <div class="field">
       <label class="lbl" for="mem-notes">Ghi chú văn phong cho AI <span class="muted" style="font-weight:400;font-size:12px">mỗi dòng một ghi chú</span></label>
       <textarea id="mem-notes" rows="3" style="min-height:64px" placeholder="Manga học đường, giọng trẻ trung&#10;Nhân vật chính hay nói trống không"></textarea>
+    </div>
+    <div class="field">
+      <label class="lbl" for="mem-chars">Nhân vật <span class="muted" style="font-weight:400;font-size:12px">AI tự ghi dần; mỗi dòng một người</span></label>
+      <textarea id="mem-chars" rows="4" placeholder="Roka: nam sinh ~16, bạn thân Miko; gọi mẹ Miko là cô"></textarea>
+    </div>
+    <div class="field">
+      <label class="lbl">Câu bạn đã sửa <span class="muted" style="font-weight:400;font-size:12px">bấm đúp vào bản dịch trên trang để sửa; AI bắt chước các câu này ở trang sau</span></label>
+      <div class="sites" id="mem-examples"></div>
     </div>
     <button class="btn small" id="mem-reset" type="button">Xoá trí nhớ của bộ này</button>
   </section>

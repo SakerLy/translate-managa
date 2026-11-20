@@ -1,0 +1,80 @@
+# Changelog
+
+Mọi thay đổi đáng chú ý của Manga Dịch. Định dạng theo [Keep a Changelog](https://keepachangelog.com/vi/1.1.0/), đánh số theo [Semantic Versioning](https://semver.org/lang/vi/).
+
+**Quy ước phát hành:** thay đổi mới được gom vào mục "Chưa phát hành". Chỉ khi chủ dự án đã test và đồng ý thì mới chốt số phiên bản và đẩy lên. Trong lúc chờ, popup và trang cài đặt hiện số phiên bản kèm `-beta`.
+
+Lịch sử git có các commit mang tên "ver 0.6.0" … "ver 0.8.0" (19–20/11/2026). Đó là các bản tạm, chưa được test và chưa từng được phát hành; toàn bộ nội dung của chúng nằm trong mục dưới đây.
+
+## [Chưa phát hành] - dự kiến 0.6.0
+
+### Thêm
+- **Xoá chữ gốc thay vì phủ khối trắng:** bong bóng được xoá theo đúng hình của nó (giữ viền và tranh), chữ thường được xoá từng nét; bản dịch vẽ bằng font truyện tranh Mali (đủ dấu tiếng Việt), xếp dòng theo dáng bong bóng.
+- **Chữ nghiêng theo chữ gốc:** thư tay, biển hiệu viết chéo thì bản dịch cũng nghiêng đúng góc (đo từ điểm ảnh, không tốn token).
+- **Nút "+" ở chỗ còn chữ chưa dịch:** bấm để dịch riêng chỗ đó; chỉ hiện ở chỗ điểm ảnh xác nhận là chữ.
+- **Trí nhớ AI theo bộ truyện mở rộng:** danh sách nhân vật, học từ câu bạn sửa (bấm đúp vào bản dịch), model trau chuốt riêng.
+- **Kéo để chỉnh vị trí bản dịch:** kéo một ô để di chuyển, Shift+kéo để đổi cỡ. Vị trí được nhớ cho trang đó (F5 vẫn giữ). Extension so chỗ bạn đặt với chỗ AI đặt ban đầu; khi một model liên tục đặt lệch cùng một hướng (từ 4 lần sửa, ít nhất 0,8% trang), các trang sau tự dời ô của model đó theo độ lệch ấy trước khi khớp vào chữ.
+- **Cài đặt số trang dịch trước** (0–10).
+- Hiện số phiên bản trong popup và trang cài đặt.
+
+### Thay đổi
+- Chỉ dịch trang bên trong chapter; trang chủ, trang giới thiệu bộ truyện, tìm kiếm không bao giờ gửi cho AI.
+- **Bấm dịch thủ công chỉ áp dụng cho bộ truyện đang mở:** sang bộ khác, ra trang chủ hay trang giới thiệu thì dừng và nhắc bấm lại; chapter tiếp theo của cùng bộ vẫn dịch. Site bật tự dịch không đổi.
+- Nhanh hơn: dịch bù chạy song song với bước trau chuốt; lượt trau chuốt thứ hai chỉ ở các trang đầu của bộ.
+- Lượt đọc ảnh được lưu ngay khi xong: F5 hay lỗi giữa chừng không gửi lại ảnh.
+- Bỏ quy tắc "bỏ qua chữ mờ (hồi tưởng)" khỏi câu lệnh gửi AI (làm Gemini bỏ sót 8% bong bóng: 89 so với 97 câu trên 8 trang); chữ hồi tưởng do extension tự nhận ra bằng điểm ảnh.
+- Groq dùng chế độ JSON object (chế độ nghiêm ngặt làm hỏng câu trả lời của qwen3.8 2/5 lần); model chỉ đọc chữ (gpt-oss) dùng được làm model trau chuốt.
+
+### Sửa lỗi
+**Đặt chữ và xoá chữ**
+- Lớp phủ trắng tràn ra ngoài bong bóng: ô lớn hơn bong bóng được xoá theo hình bong bóng; khi không xoá được thì khối phủ chỉ che phần có chữ; ô bị nới sang hoạ tiết bên cạnh (tim, tóc) được cắt về đúng phần chữ.
+- Chữ gốc dính viền bong bóng còn sót; "bóng ma" xám của chữ đã xoá; ô chồng nhau vẽ lại chữ gốc đã xoá.
+- Chữ dịch đè lên nhau khi một ô phình qua dòng chữ bên cạnh.
+- Lớp phủ tràn khỏi bong bóng ở chapter 66dcdbac/8 (kiểm tra trên trang MangaDex thật): một đốm 3 nét (trái tim ở mép) làm extension tưởng chữ rộng gấp rưỡi nên không cắt ô 50% trang về đúng bong bóng; câu do lượt dịch bù đặt vào cũng không được cắt. Giờ mọi ô bong bóng đều được cắt về đúng phần chữ.
+- Chữ hét vẽ trên tranh mà không xoá được (nét chữ dính vào hình, ví dụ "AARGHHH!!" dính mặt nhân vật ở 66dcdbac/9) bị phủ cả khối đen che mặt: giờ bản dịch nằm trên một dải ngang giữa chữ gốc, phần chữ gốc trên và dưới vẫn hiện như chú thích SFX.
+- Bong bóng chỉ có "!" / "?!" / "…": model bịa ra một câu ("Hả?!") hoặc lượt dịch bù trả "..." rồi vẽ thành dải trắng lên tóc, mặt nhân vật; giờ bỏ qua.
+- Chữ gốc còn sót ở trang 66dcdbac/9 (kiểm tra trên trang thật): vùng xoá của khung "BECAUSE SHE WAS—" bị gộp sang bong bóng bên cạnh nên xoá nhầm chỗ, khung giữ nguyên chữ Anh; bong bóng "ALL RIGHT, THEN…" bị cắt về một chữ nhỏ nên phần lớn chữ gốc không được xoá và bản dịch bị ép tí hon.
+- Hai bong bóng sát nhau / hai thùy của một bong bóng bị gộp thành một câu: tách lại về đúng chỗ.
+- Tiêu đề, credit, khung chữ trắng nền đen bị lật nhầm trục hoặc dời sang bong bóng khác.
+- Chữ gốc dọc không còn dựng chữ Việt theo chiều dọc; cỡ chữ dịch không dưới ~13px; khung dẫn truyện không in nghiêng.
+
+**Bỏ sót chữ**
+- GPT trả toạ độ hỏng (lặp cạnh phải, chỉ 3 số, sai thứ tự) làm mất câu: được sửa lại rồi khớp vào bong bóng.
+- Nét tranh dưới câu ngắn bị tính là chữ làm mất câu ("...AH...").
+- Dịch bù đọc lại một phần khung chữ đã dịch nên hiện hai bản dịch.
+- Model đặt nhiều câu vào cùng một ô (gộp còn 1/12 câu); một câu lặp ở nhiều ô; model chép lại câu lệnh; toạ độ theo pixel.
+
+**Xưng hô và trí nhớ**
+- Thêm quy tắc xưng hô: giới tính, khoảng cách tuổi, người yêu chị em, thầy trò / chức danh chốt cả cặp, ngôi số nhiều, lời dẫn phải khớp lời thoại; các trang của một bộ được trau chuốt lần lượt để trang sau dùng điều trang trước vừa học.
+- Trí nhớ bị ghi đè mỗi trang (mất cặp xưng hô và nhân vật cũ): giờ gộp.
+- Tên bộ truyện sai (mã ID, dính thẻ mô tả) và trí nhớ dồn vào "cả site": tên lấy từ tiêu đề tab, bộ truyện MangaDex lấy từ API; tên cập nhật cả khi mở trang đã dịch; trang cài đặt tự cập nhật.
+- Bảng xưng hô bị nhồi cả khối trí nhớ khi lượt trau chuốt không trả bảng mới.
+
+**Ổn định và hiệu năng**
+- Giật lag khi dịch: tổng thời gian treo trang từ 9,5 giây còn 0,8 giây trên cùng một trang.
+- Hết lượt "Reset after…" viết hoa / "try again in 18s" không được chờ; hết lượt kéo dài bị chờ chồng (9 lần gọi còn 3).
+- Model "suy nghĩ" kèm `<think>`/câu dẫn trước JSON, câu trả lời bị cắt giữa chừng.
+- "Extension context invalidated" sau khi cập nhật extension; popup tràn ngang; "dịch trước = 0" vẫn dịch trước.
+
+### Đang chờ kiểm tra
+Những lỗi bạn đã báo mà bản sửa chưa được xác nhận trên trang thật:
+- Lớp phủ tràn ra ngoài bong bóng: trang 66dcdbac/8 đã hết tràn trên trình duyệt thật với Gemini và Groq qwen; chưa thử được với GPT (gateway và OpenRouter hết credit).
+- Xoá chữ còn sót ở trang 66dcdbac/9: đã sạch trên trình duyệt thật với Gemini.
+- Khối phủ trên chữ viết thẳng lên tranh (cố ý chưa thu nhỏ: có thể để lộ chữ gốc).
+- Bỏ sót bong bóng với một số model.
+- Tên bộ truyện và trí nhớ xưng hô trên MangaDex (chưa thử được trong trình duyệt do MangaDex chặn trình duyệt test).
+
+## [0.5.4] - 2026-11-19
+- Model gắn nhãn loại chữ (bong bóng/khung/chữ trên tranh/SFX).
+
+## [0.5.3]
+- Văn phong tự nhiên cho bản scan tiếng Tây Ban Nha/Anh, gộp ô gọn hơn.
+
+## [0.5.2]
+- Sửa vị trí ô trên trang JPEG thật.
+
+## [0.5.1]
+- Trí nhớ AI theo từng bộ truyện.
+
+## [0.5]
+- Chỉ tập trung manga; Base URL không mặc định /v1.

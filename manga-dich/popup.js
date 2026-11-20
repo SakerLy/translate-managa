@@ -2,7 +2,7 @@
 // Everything that needs typing lives in the settings page (options.html), which opens in a tab and
 // survives focus changes - a popup closes and drops unsaved input as soon as you click elsewhere.
 const $ = (id) => document.getElementById(id);
-const POPUP_API = 7; // must equal API in background.js
+const POPUP_API = 8; // must equal API in background.js
 const NAMES = { gemini: 'Gemini', openrouter: 'OpenRouter', groq: 'Groq', anthropic: 'Claude', openai: 'OpenAI', custom: 'Tùy chỉnh' };
 
 const openSettings = (hash = '', site = '') => {
@@ -73,7 +73,12 @@ $('reload').onclick = () => chrome.runtime.reload();
   }
 
   // what the AI has learned about this series (series.js runs in the tab: it reads the page's own links)
-  const [{ result: ser } = {}] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: mdSeries }).catch(() => []);
+  let [{ result: ser } = {}] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: mdSeries }).catch(() => []);
+  // the page only knew the site: ask the site's API (MangaDex chapter -> series), as the page itself does
+  if (!ser || ser.key === host) {
+    const r = await chrome.runtime.sendMessage({ type: 'series-info', url: tab.url }).catch(() => null);
+    if (r?.key) ser = r;
+  }
   const sk = ser?.key || host;
   const { mem } = await chrome.runtime.sendMessage({ type: 'mem', site: sk }).catch(() => ({}));
   const pairs = (mem?.glossary || '').split('\n').filter((l) => l.trim()).length;
@@ -85,3 +90,6 @@ $('reload').onclick = () => chrome.runtime.reload();
     $('mem-open').onclick = () => openSettings('#memory', sk);
   }
 })();
+
+// version from the manifest (one source of truth, bumped per release)
+try { const m = chrome.runtime.getManifest(); document.getElementById('ver').textContent = 'v' + (m.version_name || m.version); /* -beta until released */ } catch { /* outside the extension */ }

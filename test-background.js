@@ -98,11 +98,20 @@ const call = (msg) => new Promise((res) => listener(msg, null, res));
     ctx.fetch = f0;
   }
 
-  // Groq: inactive models dropped, newest first (shape per Groq's API reference)
+  // Groq: inactive models and non-chat ones (speech, voice, guards) dropped, newest first
   replies = { 'https://api.groq.com/openai/v1/models': { data: [
     { id: 'qwen/qwen3.8-27b', created: 5, active: true }, { id: 'old-model', created: 9, active: false }, { id: 'whisper-x', created: 7, active: true },
+    { id: 'openai/gpt-oss-120b', created: 8, active: true }, { id: 'meta-llama/llama-prompt-guard-2-86m', created: 9, active: true }, { id: 'canopylabs/orpheus-v1-english', created: 9, active: true },
   ] } };
-  assert.deepEqual((await call({ type: 'models', provider: 'groq', key: 'k' })).list, ['whisper-x', 'qwen/qwen3.8-27b']);
+  assert.deepEqual((await call({ type: 'models', provider: 'groq', key: 'k' })).list, ['openai/gpt-oss-120b', 'qwen/qwen3.8-27b']);
+  { // Groq asks for json_object (its strict json_schema decoding garbled qwen's output), schema in the system prompt
+    let gb; const f1 = ctx.fetch;
+    ctx.fetch = async (u, init) => { gb = JSON.parse(init.body); return { ok: true, json: async () => ({ choices: [{ message: { content: '{"bubbles":[]}' } }] }) }; };
+    await vm.runInContext('PROVIDERS', ctx).groq.translate('k', 'm', { data: 'x', mime: 'image/png' }, 'p');
+    ctx.fetch = f1;
+    assert.equal(gb.response_format.type, 'json_object');
+    assert.match(gb.messages[0].content, /JSON Schema/);
+  }
 
   const cap = (img, so) => ({ image_input: { supported: img }, structured_outputs: { supported: so } });
   replies = { 'https://api.anthropic.com/v1/models': { data: [
@@ -189,15 +198,15 @@ const call = (msg) => new Promise((res) => listener(msg, null, res));
   let p = await polished('{"lines":["Không tin nổi luôn","Làm gì có chuyện đó!"],"glossary":"' + OLD_G + '\\nIori ↔ mẹ: con/mẹ"}');
   assert.deepEqual(p.bubbles.map((b) => [b.x, b.text]), [[1, 'Không tin nổi luôn'], [5, 'Làm gì có chuyện đó!']]);
   assert.equal(p.glossary, OLD_G + '\nIori ↔ mẹ: con/mẹ', 'updated glossary is returned');
-  assert.equal((await polished('{"lines":["a","b"],"glossary":""}')).glossary, OLD_G, 'empty glossary keeps the old one');
+  assert.equal((await polished('{"lines":["a","b"],"glossary":""}')).glossary, null, 'empty glossary = unchanged (caller keeps the old one)');
   assert.equal((await polished('{"lines":["chỉ một câu"],"glossary":"' + OLD_G + '"}')).bubbles[0].text, 'Tôi không thể tin được', 'wrong count keeps draft');
   assert.equal((await polished('{"lines":["", "x"]}')).bubbles[0].text, 'Tôi không thể tin được', 'blank line keeps draft');
   const bad = await polished('not json');
-  assert.equal(bad.bubbles[1].text, 'Điều đó là không thể', 'bad JSON keeps draft'); assert.equal(bad.glossary, OLD_G, 'and the old glossary');
+  assert.equal(bad.bubbles[1].text, 'Điều đó là không thể', 'bad JSON keeps draft'); assert.ok(bad.failed && bad.glossary === null, 'and reports the failure');
   // the glossary reaches the prompt
   let sentBody; const f0 = ctx.fetch; ctx.fetch = async (u, init) => { sentBody = init.body; return f0(u, init); };
   await polished('{"lines":["a","b"],"glossary":"x"}'); ctx.fetch = f0;
-  assert.ok(JSON.parse(sentBody).messages[1].content.at(-1).text.startsWith('BẢNG XƯNG HÔ:\n' + OLD_G));
+  assert.ok(JSON.parse(sentBody).messages[1].content.startsWith('BẢNG XƯNG HÔ:\n' + OLD_G), 'text-only call: plain string content');
   // eviction keeps the newest CACHE_MAX entries
   const max = vm.runInContext('CACHE_MAX', ctx), put = vm.runInContext('cachePut', ctx);
   for (let i = 0; i < max + 5; i++) store['c:m:' + i] = { t: i, bubbles: [] };
@@ -239,7 +248,7 @@ const call = (msg) => new Promise((res) => listener(msg, null, res));
     replies = { 'https://openrouter.ai': { choices: [{ message: { content: '["Cậu đi đâu đấy?"]' } }] } };
     const p = await pol('openrouter', 'k', 'x/y', draft, '', 'Ken ↔ Yuki: tớ/cậu');
     assert.equal(p.bubbles[0].text, 'Cậu đi đâu đấy?', 'bare-array reply replaces the draft');
-    assert.equal(p.glossary, 'Ken ↔ Yuki: tớ/cậu', 'bare-array reply keeps the old glossary');
+    assert.equal(p.glossary, null, 'bare-array reply: glossary unchanged (null)');
   }
 
   // draft port: the read pass's boxes are pushed through the caller's port before polish resolves
@@ -302,7 +311,7 @@ const call = (msg) => new Promise((res) => listener(msg, null, res));
     ctx.fetch = async (url, init) => {
       lastBody = JSON.parse(init.body);
       const isPolish = !lastBody.messages?.[1]?.content?.some?.((c) => c.type === 'image_url');
-      if (isPolish) return { ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify({ lines: JSON.parse(lastBody.messages[1].content[0].text.match(/\[([\s\S]*)\]/)[1]).map(() => 'ok'), glossary: '' }) } }] }) };
+      if (isPolish) return { ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify({ lines: JSON.parse(lastBody.messages[1].content.match(/\[([\s\S]*)\]/)[1]).map(() => 'ok'), glossary: '' }) } }] }) };
       calls++;
       return { ok: true, json: async () => ({ choices: [{ message: { content: '{"bubbles":[{"box_2d":[100,100,300,300],"text":"Cậu đi đâu?"},{"box_2d":[500,100,700,300],"text":"RẦM!","sfx":true}]}' } }] }) };
     };

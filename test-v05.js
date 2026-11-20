@@ -175,7 +175,7 @@ console.log('prompt rules OK');
   let reply = '';
   const c = { AbortSignal, crypto, TextEncoder, URL, setTimeout, clearTimeout, console, btoa,
     fetch: async (url, init) => {
-      const isPolish = !JSON.parse(init.body).messages[1].content.some((x) => x.type === 'image_url');
+      const isPolish = typeof JSON.parse(init.body).messages[1].content === 'string'; // text-only call
       const content = isPolish ? JSON.stringify({ lines: ['Ừ'], glossary: reply, names: [] })
         : '{"bubbles":[{"box_2d":[100,100,300,300],"text":"Ừ","src":"うん","who":"","sfx":false,"style":""}]}';
       return { ok: true, json: async () => ({ choices: [{ message: { content } }] }) };

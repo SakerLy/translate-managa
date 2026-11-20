@@ -36,7 +36,16 @@
 - **AI nhớ riêng từng bộ truyện:** bảng xưng hô (kèm quan hệ) và tên riêng được lưu cho từng bộ, nên đọc nhiều bộ trên cùng một site không bị lẫn xưng hô của bộ này sang bộ kia. Đổi chapter hay tắt trình duyệt vẫn đúng như trước. **Sửa tay được** trong trang cài đặt nếu AI ghi sai.
   - Bộ truyện được nhận ra từ link về trang bộ truyện (MangaDex) hoặc từ đường dẫn (`/manga/ten-bo/chapter-12`). Site nào không nhận ra được thì dùng chung một trí nhớ cho cả site, như trước.
   - Lưu ý: AI không tự huấn luyện lại. Nó "học" bằng cách đọc lại ghi chú của các trang trước mỗi khi dịch trang mới.
+  - **Danh sách nhân vật** (tuổi, vai, quan hệ) được AI ghi dần qua các chương, để chọn xưng hô đúng ngay từ đầu.
+- **Dạy AI bằng chính bản sửa của bạn:** bấm đúp vào một bản dịch trên trang để sửa. Bản sửa được lưu (F5 vẫn còn) và trở thành ví dụ mẫu: các trang sau của bộ đó bắt chước đúng giọng và xưng hô bạn muốn.
+- **Model trau chuốt riêng:** model đọc ảnh nên nhanh, model viết lại câu nên giỏi tiếng Việt. Lượt trau chuốt chỉ gửi chữ nên dùng model mạnh vẫn nhanh. Văn phong phụ thuộc chủ yếu vào model này.
 - **Không dịch word-by-word:** câu chào, cảm thán, câu đùa, thành ngữ được viết lại theo cách nói tự nhiên của tiếng Việt.
+
+### Trang dịch trông như bản scan thật
+- **Xoá chữ gốc thay vì phủ ô trắng:** từng nét chữ gốc được xoá và lấp bằng điểm ảnh xung quanh. Bong bóng trông như chưa từng có chữ, không còn khung chữ nhật. Chỗ nào không xoá sạch được (chữ dính vào hoạ tiết) thì tự quay về cách phủ nền.
+- **Font truyện tranh** (Mali, giấy phép OFL, đủ dấu tiếng Việt) đi kèm extension; tắt được trong Cài đặt.
+- **Xếp dòng theo dáng bong bóng:** dòng giữa dài, dòng đầu và cuối ngắn, như chữ của người làm truyện.
+- **AI nhận ra dạng chữ** (bong bóng, khung dẫn truyện, chữ vẽ trên tranh, SFX) và chèn bản dịch theo từng dạng; chữ trên tranh có viền cho dễ đọc.
 
 ### Ô dịch khớp bong bóng, không sót chữ
 - **Bám theo điểm ảnh:**
@@ -52,11 +61,24 @@
   - Chữ dịch lấy chiều cao chữ gốc của bong bóng làm chuẩn, giống cách người làm chữ truyện làm.
   - Câu ngắn trong bong bóng rộng không bị phóng khổng lồ.
   - Câu dài trong bong bóng hẹp thì ô tự nới ra thay vì thu chữ li ti.
-- **Dịch bù chữ bị sót:** tự dò các khối chữ còn nguyên chữ gốc mà chưa có bản dịch, cắt riêng vùng đó ở độ phân giải gốc rồi gửi AI dịch lại (tối đa 4 vùng/trang).
+- **Dịch bù chữ bị sót:**
+  - Tự dò các khối chữ còn nguyên chữ gốc mà chưa có bản dịch, cả chữ tối trên nền sáng lẫn chữ trắng trên nền đen.
+  - Mọi vùng sót được ghép vào **một** ảnh gửi AI trong một lượt gọi (tối đa 8 vùng/trang), ở độ phân giải gốc.
+  - Bản dịch bù đặt đúng vào khối chữ đã dò, không phụ thuộc toạ độ model trả về.
+  - Câu bị chia qua nhiều bong bóng được chia bản dịch theo từng bong bóng, không bỏ trống bong bóng nào.
+- **Một bong bóng một ô:** khi AI gộp lời của 2-3 bong bóng dính nhau thành một câu, extension nhìn viền bong bóng trên ảnh để chia lại từng câu về đúng bong bóng của nó (theo thứ tự đọc manga), chữ không bao giờ tràn qua viền.
+- **Kéo để chỉnh chỗ đặt chữ:** kéo ô dịch để di chuyển, Shift+kéo để đổi cỡ; vị trí được nhớ, và nếu AI hay đặt lệch về một phía thì các trang sau tự bù độ lệch đó.
+- **Nút "+" cho chỗ còn sót:** nếu vẫn còn chữ chưa dịch, một nút "+" mờ hiện đúng chỗ đó; bấm để dịch riêng chỗ ấy.
+- **Chữ nghiêng theo chữ gốc:** thư tay, biển hiệu viết chéo thì bản dịch cũng nghiêng đúng góc đó.
+- **Bỏ qua chữ hồi tưởng:** chữ in mờ/xám nhắc lại lời thoại cũ (hồi tưởng chapter trước, tiếng vọng) là phông nền, không dịch và không tốn lượt dịch bù.
 - Ô trùng nhau được gộp, ô chồng nhau được tách. Bấm vào ô để xem lại chữ gốc.
 
 ### Dễ dùng
 - **Tự dịch theo site:** bật một lần cho MangaDex (hay site bất kỳ), sau đó mở chapter nào là tự dịch, không cần bấm icon nữa.
+- **Bấm thủ công chỉ dịch đúng bộ đang đọc:** khi bấm nút (không bật tự dịch cho site), extension chỉ dịch bộ truyện bạn đang đọc lúc bấm. Sang chapter tiếp theo của bộ đó vẫn dịch tiếp; sang bộ khác, ra trang chủ hay trang giới thiệu bộ truyện thì dừng và nhắc bấm lại.
+- **Chỉ tốn token cho trang truyện:** chỉ dịch các trang bên trong chapter (`/chapter/…`, `/read/…`, `…-chapter-12`…). Trang chủ, trang bộ truyện (danh sách chapter), trang tìm kiếm, banner và ảnh bìa không bao giờ được gửi cho AI.
+- **Dịch trước bao nhiêu trang tuỳ bạn** (cài đặt, mặc định 2): đọc tới đâu đã có bản dịch tới đó; đặt 0 để chỉ dịch trang đang hiện trên màn hình (ít tốn lượt gọi nhất).
+- **Không mất tiền oan khi lỗi giữa chừng:** lượt đọc ảnh (đắt nhất) được lưu ngay khi xong. F5, cập nhật extension hay cổng API lỗi lúc đang trau chuốt thì lần sau chỉ chạy lại lượt trau chuốt chỉ có chữ, không gửi lại ảnh; nếu trau chuốt hỏng hẳn, trang vẫn hiện bản dịch nháp thay vì báo lỗi.
 - **Phím tắt** <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd> để dịch tab đang mở.
 - **Huỷ bất cứ lúc nào:**
   - mỗi trang đang dịch có nút **Huỷ** ngay trên trang
@@ -116,7 +138,7 @@ Trang đang gọi API dở thì vẫn chạy nốt ở nền. Kết quả đư�
 |---|---|---|
 | **Google Gemini** *(khuyên dùng)* | [aistudio.google.com](https://aistudio.google.com/apikey) | Có **gói miễn phí**; dòng `flash-lite` nhanh nhất. |
 | **OpenRouter** | [openrouter.ai/keys](https://openrouter.ai/keys) | Một key dùng hàng trăm model; model miễn phí xếp đầu danh sách. |
-| **Groq** | [console.groq.com/keys](https://console.groq.com/keys) | Có gói miễn phí. *Chưa test với key thật.* |
+| **Groq** | [console.groq.com/keys](https://console.groq.com/keys) | Có gói miễn phí nhưng giới hạn rất chặt (~7.000 token vào và ~1.000 token ra mỗi phút cho model đọc ảnh): khoảng **1 trang mỗi vài phút**. Đọc ảnh: `qwen/qwen3.8-27b`; trau chuốt: `openai/gpt-oss-120b` (chỉ đọc chữ, không đọc được ảnh). |
 | **Anthropic** (Claude) | [console.anthropic.com](https://console.anthropic.com/settings/keys) | Trả phí |
 | **OpenAI** (GPT) | [platform.openai.com](https://platform.openai.com/api-keys) | Trả phí |
 | **Tùy chỉnh** | Cổng trung gian, Ollama, LM Studio… | Theo server. |
@@ -250,6 +272,10 @@ manga-dich/                   thư mục extension (Load unpacked thư mục nà
 test-background.js            Test unit API/nhà cung cấp (không gọi mạng)
 test-v04.js                   Test unit: gộp ô, style, quota, trí nhớ theo site, separate()
 test-v05.js                   Test unit: sửa đảo trục, neo ô, textBlocks, schema strict, prompt manga, huỷ, trí nhớ theo bộ, UI
+test-v07.js                   Test unit: chịu lỗi cổng/model (hết lượt, think-tag, JSON bị cắt, ô chồng, lặp câu, chép lệnh, toạ độ pixel)
+test-pronoun.js               Test thật: xưng hô theo tuổi, giới, quan hệ, vai, mạch thoại (21 tình huống)
+test-v06.js                   Test unit: xoá chữ gốc, xếp dòng dáng bong bóng, chỉ dịch trang chapter, tách ô chồng/bong bóng gộp,
+                              model trau chuốt riêng, học từ bản sửa, dùng lại bản nháp khi lỗi, font
 test-text.js                  Test ngắt dòng + dò trang không chữ
 test-fit.js                   Đo fit.js trên điểm ảnh thật
 test-live.js / test-ab.js     Test thật: dịch 1 trang, chấm vị trí ô theo đáp án; so sánh prompt A/B
@@ -267,7 +293,7 @@ draw-boxes.py                 Vẽ ô của model (đỏ) và đáp án (xanh) l
 Cần [Node.js](https://nodejs.org) 18+. Các script `.py` cần Python và Pillow (`pip install pillow`).
 
 ```bash
-node test-background.js && node test-v04.js && node test-v05.js && node test-text.js
+node test-background.js && node test-v04.js && node test-v05.js && node test-v06.js && node test-v07.js && node test-text.js
 ```
 
 Test thật cần key trong file `.env` ở thư mục gốc (đã nằm trong `.gitignore`):
@@ -289,6 +315,25 @@ node test-fit.js page4.rgba test-fixtures/result-*.json
 ```
 
 Một trang **ĐẠT** khi ít nhất 80% bong bóng có ô dịch đặt lên và ít nhất 80% ô dịch nằm đúng một bong bóng.
+
+</details>
+
+<details>
+<summary><b>Đánh số phiên bản</b></summary>
+
+<br>
+
+Theo [Semantic Versioning](https://semver.org/lang/vi/) `MAJOR.MINOR.PATCH` (trường `version` trong `manifest.json`). Lịch sử thay đổi ở [CHANGELOG.md](CHANGELOG.md).
+
+| Thay đổi | Tăng | Ví dụ |
+|---|---|---|
+| Chỉ sửa lỗi, tinh chỉnh prompt/thuật toán, không thêm gì cho người dùng | PATCH | 0.6.0 → 0.6.1 |
+| Thêm tính năng hoặc cài đặt mới, vẫn dùng được cài đặt cũ | MINOR | 0.6.1 → 0.7.0 |
+| Cài đặt/trí nhớ cũ không dùng được nữa | MAJOR (từ 1.0 trở đi; trước 1.0 tăng MINOR) | 1.4.2 → 2.0.0 |
+
+Chỉ chốt số phiên bản sau khi chủ dự án đã test và đồng ý. Trong lúc chờ, thay đổi ghi ở mục "Chưa phát hành" của CHANGELOG và `version_name` trong manifest mang hậu tố `-beta` (hiện trong popup và trang cài đặt).
+
+Đổi prompt chỉ làm cache cũ hết hạn (`CACHE_V`), không tính là thay đổi phá vỡ.
 
 </details>
 

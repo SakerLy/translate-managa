@@ -1,7 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Manga Dịch",
-  "version": "0.5.4",
+  "version": "0.6.0",
+  "version_name": "0.6.0-beta",
   "description": "Dịch manga sang tiếng Việt ngay trên bong bóng thoại - từ bản gốc tiếng Nhật hay bản scan tiếng Anh, Tây Ban Nha, Indonesia… Tự học xưng hô và tên riêng cho từng bộ truyện.",
   "permissions": [
     "storage",
@@ -25,8 +26,20 @@
   },
   "commands": {
     "translate-tab": {
-      "suggested_key": { "default": "Alt+Shift+D" },
+      "suggested_key": {
+        "default": "Alt+Shift+D"
+      },
       "description": "Dịch trang truyện đang mở"
     }
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "fonts/*.ttf"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ]
 }

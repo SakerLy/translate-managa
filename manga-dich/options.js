@@ -2,7 +2,7 @@
 // Every input saves to chrome.storage.local as you type; the popup and running pages read from there.
 const $ = (id) => document.getElementById(id);
 const send = (msg) => chrome.runtime.sendMessage(msg).then((r) => { if (r?.error) throw new Error(r.error); return r; });
-const API = 7; // must equal API in background.js
+const API = 8; // must equal API in background.js
 
 const KEY_PAGES = {
   gemini: 'https://aistudio.google.com/apikey',
@@ -38,6 +38,8 @@ function showProvider(p) {
   $('getkey').hidden = !KEY_PAGES[p];
   $('getkey').href = KEY_PAGES[p] || '#';
   $('model').value = st.models[p] || '';
+  $('polish-model').value = (st.polishModels || {})[p] || '';
+  $('polish-msg').textContent = '';
   $('model-list').replaceChildren();
   $('models').hidden = true;
   msg(st.models[p] ? `✓ Đang dùng ${st.models[p]}` : 'Nhập key (và Base URL nếu cần), rồi bấm “Tìm model tốt nhất”.', st.models[p] ? 'ok' : '');
@@ -158,8 +160,33 @@ $('test').onclick = async () => {
 };
 $('model').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('test').click(); });
 
+// ---------- polish model (text-only rewrite) ----------
+const savePolishModel = debounce(async () => {
+  st.polishModels ||= {};
+  st.polishModels[prov()] = $('polish-model').value.trim();
+  await store({ polishModels: st.polishModels });
+}, 400);
+$('polish-model').addEventListener('input', savePolishModel);
+$('test-polish').onclick = async () => {
+  const p = prov(), m = $('polish-model').value.trim() || st.models[p];
+  if (!m) { $('polish-msg').textContent = 'Chưa có model nào.'; return; }
+  $('polish-msg').className = 'status'; $('polish-msg').textContent = `Đang gọi thử ${m}…`;
+  try {
+    const t0 = Date.now();
+    const { sample } = await send({ type: 'probe-text', provider: p, key: st.keys[p], base: st.bases[p], model: m });
+    $('polish-msg').className = 'status ok';
+    $('polish-msg').textContent = `✓ ${m} (${((Date.now() - t0) / 1000).toFixed(1)}s): “${sample}”`;
+  } catch (e) { $('polish-msg').className = 'status err'; $('polish-msg').textContent = `✗ ${m}: ${e.message.split('\n')[0]}`; }
+};
+
 // ---------- switches ----------
 for (const id of ['polish', 'recover', 'sfx', 'textOnly']) $(id).onchange = () => store({ [id]: $(id).checked });
+$('ahead').onchange = () => {
+  const n = Math.max(0, Math.min(10, Math.round(+$('ahead').value || 0)));
+  $('ahead').value = n;
+  store({ ahead: n });
+};
+$('mangaFont').onchange = () => store({ font: $('mangaFont').checked ? 'manga' : 'system' });
 
 function renderSites() {
   const list = st.autoSites || [];
@@ -176,12 +203,28 @@ function renderSites() {
 async function loadMemSite() {
   const site = $('mem-site').value;
   const off = !site;
-  for (const id of ['mem-glossary', 'mem-names', 'mem-notes', 'mem-reset']) $(id).disabled = off;
+  for (const id of ['mem-glossary', 'mem-names', 'mem-notes', 'mem-chars', 'mem-reset']) $(id).disabled = off;
   if (off) return;
   const { mem } = await send({ type: 'mem', site });
   $('mem-glossary').value = mem.glossary || '';
   $('mem-names').value = (mem.names || []).join(', ');
   $('mem-notes').value = (mem.notes || []).join('\n');
+  $('mem-chars').value = mem.chars || '';
+  renderExamples(site, mem.examples || []);
+}
+function renderExamples(site, list) {
+  $('mem-examples').replaceChildren(...(list.length ? list.slice().reverse().map((e) => {
+    const c = document.createElement('span'); c.className = 'chip'; c.title = e.src || '';
+    c.textContent = `“${e.ai}” → “${e.fix}”`;
+    const x = document.createElement('button'); x.type = 'button'; x.textContent = '×'; x.setAttribute('aria-label', 'Bỏ câu sửa này');
+    x.onclick = async () => {
+      const rest = list.filter((v) => v !== e);
+      await send({ type: 'mem-save', site, mem: { examples: rest } });
+      renderExamples(site, rest); flashSaved();
+    };
+    c.append(x);
+    return c;
+  }) : [Object.assign(document.createElement('span'), { className: 'muted', textContent: 'Chưa có. Bấm đúp vào một bản dịch trên trang truyện để sửa.' })]));
 }
 const saveMem = debounce(async () => {
   const site = $('mem-site').value;
@@ -190,10 +233,11 @@ const saveMem = debounce(async () => {
     glossary: $('mem-glossary').value.trim(),
     names: $('mem-names').value.split(',').map((s) => s.trim()).filter(Boolean),
     notes: $('mem-notes').value.split('\n').map((s) => s.trim()).filter(Boolean),
+    chars: $('mem-chars').value.trim(),
   } });
   flashSaved();
 }, 600);
-for (const id of ['mem-glossary', 'mem-names', 'mem-notes']) $(id).addEventListener('input', saveMem);
+for (const id of ['mem-glossary', 'mem-names', 'mem-notes', 'mem-chars']) $(id).addEventListener('input', saveMem);
 $('mem-site').onchange = loadMemSite;
 $('mem-reset').onclick = async () => {
   const site = $('mem-site').value;
@@ -208,7 +252,7 @@ $('reload').onclick = () => chrome.runtime.reload();
 (async () => {
   const hello = await chrome.runtime.sendMessage({ type: 'hello' }).catch(() => null);
   if (hello?.api !== API) { $('stale').hidden = false; return; }
-  st = await chrome.storage.local.get(['provider', 'keys', 'models', 'bases', 'polish', 'sfx', 'textOnly', 'recover', 'autoSites']);
+  st = await chrome.storage.local.get(['provider', 'keys', 'models', 'bases', 'polishModels', 'polish', 'sfx', 'textOnly', 'recover', 'autoSites', 'font', 'ahead']);
   st.keys ||= {}; st.models ||= {}; st.bases ||= {};
   ({ bases: defaults } = await send({ type: 'defaults' }).catch(() => ({ bases: {} })));
   const radio = document.querySelector(`input[name=provider][value="${st.provider || 'gemini'}"]`);
@@ -218,6 +262,8 @@ $('reload').onclick = () => chrome.runtime.reload();
   $('recover').checked = st.recover ?? true;
   $('sfx').checked = st.sfx ?? true;
   $('textOnly').checked = st.textOnly ?? true;
+  $('ahead').value = st.ahead ?? 2;
+  $('mangaFont').checked = (st.font || 'manga') !== 'system';
   renderSites();
   const { sites } = await send({ type: 'mem-list' }).catch(() => ({ sites: [] }));
   const want = new URLSearchParams(location.search).get('site');
@@ -229,4 +275,19 @@ $('reload').onclick = () => chrome.runtime.reload();
   $('mem-site').replaceChildren(...(all.length ? all.map((s) => new Option(name(s), s.key)) : [new Option('Chưa có bộ nào - dịch vài trang trước', '')]));
   if (want) $('mem-site').value = want;
   loadMemSite();
+  // The page translating in another tab keeps teaching the AI: show it live (this page used to show what was
+  // stored when it was opened, so new pairs and fixed names never appeared). Not while you are typing.
+  const typing = () => ['mem-glossary', 'mem-names', 'mem-notes', 'mem-chars'].includes(document.activeElement?.id);
+  const refresh = debounce(async () => {
+    const keep = $('mem-site').value;
+    const { sites: now } = await send({ type: 'mem-list' }).catch(() => ({ sites: [] }));
+    now.sort((a, z) => name(a).localeCompare(name(z)));
+    $('mem-site').replaceChildren(...now.map((s) => new Option(name(s), s.key)));
+    $('mem-site').value = keep;
+    if (!typing()) loadMemSite();
+  }, 800);
+  chrome.storage.onChanged.addListener((ch, area) => { if (area === 'local' && Object.keys(ch).some((k) => k.startsWith('mem:'))) refresh(); });
 })();
+
+// version from the manifest (one source of truth, bumped per release)
+try { const m = chrome.runtime.getManifest(); document.getElementById('ver').textContent = 'v' + (m.version_name || m.version); /* -beta until released */ } catch { /* outside the extension */ }
