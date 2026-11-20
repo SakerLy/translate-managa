@@ -109,6 +109,8 @@
 
 ## Sử dụng
 
+<img src="docs/popup.png" alt="Popup Manga Dịch: nút Dịch trang này, model đang dùng, công tắc tự dịch theo site, trau chuốt, SFX và trí nhớ AI của bộ truyện" width="340" align="right">
+
 1. **Kết nối AI (một lần):** bấm icon **Manga Dịch** → **Mở cài đặt** (hoặc nút ⚙). Trang cài đặt mở trong tab mới:
    - chọn nhà cung cấp, dán **API key** (và **Base URL** nếu dùng cổng trung gian)
    - bấm **Tìm model tốt nhất**
@@ -122,6 +124,8 @@ Trong lúc chờ, góc trang hiện `Đang dịch… 5s` cùng nút **Huỷ**. B
 Muốn dừng cả tab: mở popup → **Dừng dịch tab này**. Các trang đã dịch vẫn giữ nguyên. Bấm **Dịch trang này** hoặc phím tắt để chạy tiếp.
 
 Trang đang gọi API dở thì vẫn chạy nốt ở nền. Kết quả được lưu vào bộ nhớ đệm, nên **Dịch lại** sau đó không tốn thêm token.
+
+<br clear="right">
 
 | Công tắc | Tác dụng |
 |---|---|
