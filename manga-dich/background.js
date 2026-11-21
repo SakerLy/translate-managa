@@ -54,7 +54,7 @@ VÍ DỤ (bong bóng có chữ nằm ở nửa trên bên trái, chiếm khoản
 {"bubbles": [{"box_2d": [100, 50, 300, 500], "text": "Cậu định đi đâu vậy?", "style": "", "kind": "bubble"}]}`;
 // box_2d [ymin, xmin, ymax, xmax] on a 0-1000 scale is the box format Gemini is trained on (per Google's
 // image-understanding docs); free-form x/y/w/h percentages came back misplaced on a real page.
-const pageJob = (withSrc) => ({
+const pageJob = (withSrc, withMarks = false) => ({
   name: 'bubbles',
   // src (the original text) is only needed by polish(); it costs ~500 output tokens a page, so skip it otherwise
   system: SYSTEM + ' ' + (withSrc ? 'Mỗi mục thêm "src": chữ gốc đúng như trong ảnh (bên cạnh "text" là bản dịch), và "who": ai nói với ai theo tranh, dạng "người nói (giới, tuổi/vai) → người nghe (giới, tuổi/vai)" - GIỚI và TUỔI ước lượng từ nét vẽ là BẮT BUỘC vì chúng quyết định xưng hô (vd "em gái nhỏ → anh trai học sinh", "phụ nữ trung niên → nữ sinh (bạn của con bà)", "nữ sinh → phụ nữ trung niên", "cậu bé → ông nội", "thầy giáo → cả lớp", "dẫn truyện"); người nói không thấy trong khung thì suy từ mạch thoại (câu đáp thường là của người vừa bị hỏi); không rõ thì để "".' : '')
@@ -65,10 +65,11 @@ const pageJob = (withSrc) => ({
       bubbles: {
         type: 'array',
         items: {
-          type: 'object', additionalProperties: false, required: ['box_2d', ...(withSrc ? ['src', 'who'] : []), 'text', 'sfx', 'style', 'kind'], // OpenAI strict mode: every property must be listed
+          type: 'object', additionalProperties: false, required: ['box_2d', ...(withSrc ? ['src', 'who'] : []), ...(withMarks ? ['marks'] : []), 'text', 'sfx', 'style', 'kind'], // OpenAI strict mode: every property must be listed
           properties: {
             box_2d: { type: 'array', items: { type: 'number' } },
             ...(withSrc && { src: { type: 'string' }, who: { type: 'string' } }),
+            ...(withMarks && { marks: { type: 'array', items: { type: 'integer' } } }), // numbered red frames this line sits in
             text: { type: 'string' },
             sfx: { type: 'boolean' }, // true = onomatopoeia/SFX; filtered out when the user turns SFX off
             style: { type: 'string' }, // '' | big | small | shout | whisper | narration | vertical
@@ -388,7 +389,7 @@ function jsonOf(text) {
   }
 }
 
-function parseBubbles(text, size) {
+function parseBubbles(text, size, marks = []) {
   // Some models wrap JSON in fences; a few (measured: glm-4.6v via gateway, 2 of 3 runs with the
   // old prompt) ignore the schema entirely and answer with one "[ymin, xmin, ymax, xmax] text" line
   // per bubble. JSON.parse throws on that, so fall back to a line parser before giving up - it
@@ -436,7 +437,16 @@ function parseBubbles(text, size) {
   const c = (v) => Math.min(1000, Math.max(0, v * x10)) / 10;
   const STYLES = new Set(['big', 'small', 'shout', 'whisper', 'narration', 'vertical']);
   const KINDS = new Set(['bubble', 'box', 'art', 'sfx']);
-  const parsed = bubbles.flatMap(({ box_2d: b, text: t, src, who, sfx, style, kind }) => {
+  const byId = new Map(marks.map((m) => [m.id, m]));
+  const parsed = bubbles.flatMap(({ box_2d: b, text: t, src, who, sfx, style, kind, marks: ids }) => {
+    // a line the model tied to numbered frames sits exactly on them (union), whatever its own box says
+    const on = (Array.isArray(ids) ? ids : [ids]).map((i) => byId.get(+i)).filter(Boolean);
+    if (on.length && t?.trim()) {
+      const x0 = Math.min(...on.map((m) => m.x)), y0 = Math.min(...on.map((m) => m.y));
+      const w = Math.max(...on.map((m) => m.x + m.w)) - x0, h = Math.max(...on.map((m) => m.y + m.h)) - y0;
+      const st = STYLES.has(style) ? style : '';
+      return [{ x: x0, y: y0, w, h, text: t.trim(), marked: true, ...(src && { src }), ...(who && { who }), ...(KINDS.has(kind) && { kind }), ...(sfx && { sfx: true }), ...(st && { style: st }) }];
+    }
     // GPT models garble box_2d now and then; each shape below lost lines on live MangaDex pages:
     //   3 numbers [134, 593, 173]: top, left, bottom - guess the right edge, the pixel fit finds the bubble
     if (Array.isArray(b) && b.length === 3 && b.every(Number.isFinite) && b[2] - b[0] >= 10) b = [b[0], b[1], b[2], b[1] + Math.max(60, b[2] - b[0])];
@@ -458,7 +468,7 @@ function parseBubbles(text, size) {
   // Most lines stacked on one spot = the model didn't locate anything: let the queue ask again
   const spot = (b) => [b.x, b.y, b.w, b.h].map((v) => Math.round(v)).join(',');
   const stacks = new Map();
-  for (const b of merged) stacks.set(spot(b), (stacks.get(spot(b)) || 0) + 1);
+  for (const b of merged) if (!b.marked) stacks.set(spot(b), (stacks.get(spot(b)) || 0) + 1); // lines on one numbered frame share it by design
   if (merged.length >= 3 && Math.max(...stacks.values()) >= Math.max(3, 0.5 * merged.length)) {
     throw new Error('Model đặt nhiều câu vào cùng một chỗ - không xác định được vị trí bong bóng.');
   }
@@ -834,7 +844,7 @@ async function run(item) {
 }
 
 // translate(): resolve provider + cache check, then hand the work to the queue
-async function translate({ data, mime, w, h, url, context, glossary = '', site, seriesLabel = '', urgent, onDraft, part = false, tag, draftPort }) {
+async function translate({ data, mime, w, h, url, context, glossary = '', site, seriesLabel = '', urgent, onDraft, part = false, tag, draftPort, marks }) {
   if (!data) ({ data, mime } = await fetchImage(url));
   const { provider = 'anthropic', keys = {}, models = {}, bases = {}, polishModels = {}, polish: polishOn = true, sfx = true }
     = await chrome.storage.local.get(['provider', 'keys', 'models', 'bases', 'polishModels', 'polish', 'sfx']);
@@ -855,7 +865,9 @@ async function translate({ data, mime, w, h, url, context, glossary = '', site, 
   if (hit) return { bubbles: hit.bubbles, glossary, key, moves: hit.moves }; // same page already translated by this model: no API call
   // the read pass alone (no polish model in it): reused when only the polish was lost (reload, error)
   const draftKey = 'd' + (await cacheKey(models[provider] + (sfx ? '' : '-sfx') + (part ? '+part' : ''), data)).slice(1);
-  const job = { key, draftKey, size: w > 0 && h > 0 ? { w, h } : null, data, mime, context, glossary, site, seriesLabel, provider, base: bases[provider], model: models[provider], polishModel, apiKey: keys[provider], doPolish, sfx, part };
+  // numbered text blocks drawn on the image by the page (content.js grab): checked here, they come from a page
+  const okMarks = Array.isArray(marks) && !part ? marks.filter((m) => m && Number.isInteger(m.id) && ['x', 'y', 'w', 'h'].every((k) => Number.isFinite(m[k]))).slice(0, 40) : [];
+  const job = { key, draftKey, size: w > 0 && h > 0 ? { w, h } : null, data, mime, context, glossary, site, seriesLabel, provider, base: bases[provider], model: models[provider], polishModel, apiKey: keys[provider], doPolish, sfx, part, marks: okMarks };
   return new Promise((resolve) => enqueue(key, job, urgent, (r) => resolve(r?.error ? r : { ...r, key }), onDraft, tag || draftPort));
 }
 
@@ -876,7 +888,7 @@ function seriesTurn(site, fn) {
 // sfx=false drops the model's SFX-tagged bubbles before polish and before the draft is pushed,
 // so both paints and the cache agree on what the user asked to see.
 async function translateJob(job, onDraft) {
-  const { key, draftKey, size, data, mime, context, glossary = '', site, seriesLabel = '', provider, base, model, polishModel = model, apiKey, doPolish, sfx = true, part = false } = job;
+  const { key, draftKey, size, data, mime, context, glossary = '', site, seriesLabel = '', provider, base, model, polishModel = model, apiKey, doPolish, sfx = true, part = false, marks = [] } = job;
   const P = providerFor(provider, base);
   // memory của site: xưng hô/tên riêng/văn phong học từ các trang & chapter trước
   const mem = await loadMem(site).catch(() => ({ glossary: '', names: [], notes: [] }));
@@ -884,9 +896,14 @@ async function translateJob(job, onDraft) {
   const where = part
     ? 'ẢNH NÀY GHÉP một hoặc nhiều VÙNG CẮT của trang truyện (xếp dọc, ngăn bằng vạch đen), mỗi vùng chứa khối chữ mà lượt đọc trước bỏ sót. Dịch MỌI chữ trong từng vùng; box_2d tính theo khung ảnh ghép này, mỗi ô nằm gọn trong một vùng. Không có chữ thì trả {"bubbles": []}.\n'
       + 'Lời thoại đã dịch của trang này (giữ đúng xưng hô):\n' + (context || '(chưa có)')
+      // a region that only continues a line already translated (text written just under its bubble) must not
+      // become a fragment of its own (live GPT 6b101d55/7: "Làm…"): the page keeps the line, erases this too
+      + '\nNếu chữ trong một vùng chỉ là phần tiếp của một câu ĐÃ CÓ trong danh sách trên, ghi lại ĐÚNG NGUYÊN VĂN câu đó vào "text" - không dịch lại, không tách ra một mẩu.'
     : context ? `Lời thoại trang trước (giữ xưng hô nhất quán):\n${context}` : 'Đây là trang đầu tiên.';
-  const prompt = (head ? head + '\n\n' : '') + where;
-  const call = () => P.translate(apiKey, model, { data, mime }, prompt, undefined, pageJob(doPolish));
+  // numbered text blocks (content.js): the model names the frame, the pixels give the position
+  const markNote = !part && marks.length ? `\n\nẢnh có ${marks.length} khung đỏ đánh số (1-${marks.length}) quanh những chỗ có thể là chữ. Khung và số đỏ KHÔNG phải chữ của truyện - không dịch chúng; có khung không chứa chữ (nét vẽ) - bỏ qua. Với mỗi mục: "marks" = số của (các) khung chứa chữ của mục đó (một bong bóng nằm trong 2 khung thì ghi cả 2); chữ không nằm trong khung nào thì "marks": [] và box_2d như thường. Vẫn ghi box_2d cho mọi mục.` : '';
+  const prompt = (head ? head + '\n\n' : '') + where + markNote;
+  const call = () => P.translate(apiKey, model, { data, mime }, prompt, undefined, pageJob(doPolish, marks.length > 0));
   // Already read before (F5 / extension reload / a polish error mid-page): the image was paid for once,
   // reuse those lines and only redo the text-only polish - never send the image again.
   const saved = draftKey && !part && (await chrome.storage.local.get(draftKey))[draftKey];
@@ -897,7 +914,7 @@ async function translateJob(job, onDraft) {
   // (recovery crops answer without src: "..." for a dotted bubble, drawn as a strip over the hair, 66dcdbac/9)
   const marksOnly = (b) => (typeof b.src === 'string' && b.src.trim() && !/[\p{L}\p{N}]/u.test(b.src)) || !/[\p{L}\p{N}]/u.test(String(b.text));
   const notEcho = (list) => list.filter((b) => !marksOnly(b) && !ECHO.some((e) => String(b.text).toLowerCase().includes(e)));
-  const read = async () => shiftByLearnt(notEcho(parseBubbles(await call(), size)), provider + '/' + model, part);
+  const read = async () => shiftByLearnt(notEcho(parseBubbles(await call(), size, marks)), provider + '/' + model, part);
   let bubbles = saved ? saved.bubbles : await read();
   if (!saved) {
   // a page that clearly has text but came back with zero boxes is a model flake (seen with gpt-5.6-sol,
@@ -910,7 +927,7 @@ async function translateJob(job, onDraft) {
   const untranslated = (b) => !b.sfx && b.text.split(/\s+/).length >= 3 && !VI.test(b.text);
   if (bubbles.some(untranslated)) {
     const warn = 'LƯU Ý: lần trước trường "text" bị trả NGUYÊN VĂN ngôn ngữ gốc. "text" PHẢI là bản dịch TIẾNG VIỆT.\n\n';
-    const again = await P.translate(apiKey, model, { data, mime }, warn + prompt, undefined, pageJob(doPolish)).then((t) => notEcho(parseBubbles(t, size)), () => []);
+    const again = await P.translate(apiKey, model, { data, mime }, warn + prompt, undefined, pageJob(doPolish, marks.length > 0)).then((t) => notEcho(parseBubbles(t, size, marks)), () => []);
     if (again.length && !again.some(untranslated)) bubbles = again;
     else bubbles = bubbles.filter((b) => !untranslated(b));
   }

@@ -211,7 +211,23 @@
     g.imageSmoothingQuality = 'high';
     g.drawImage(src, 0, 0, c.width, c.height);
     // pixels stay in the page (for fitBubbles); only the JPEG goes to the worker. Throws on a tainted canvas.
-    return { msg: { data: c.toDataURL('image/jpeg', 0.88).split(',')[1], mime: 'image/jpeg', w: c.width, h: c.height }, px: g.getImageData(0, 0, c.width, c.height), clean: src };
+    const px = g.getImageData(0, 0, c.width, c.height);
+    // Numbered text blocks (the way open-source translators work: they find the text, the model only reads it).
+    // Lettering the pixels already found gets a thin red frame and a number on the copy the model sees - never on
+    // `px` - and the model names the number for each line, so those lines land exactly where the lettering is
+    // instead of where GPT guessed (swapped x/y, boxes off by a bubble). Text in no frame keeps the model's box.
+    const marks = typeof textBlocks === 'function' ? textBlocks(px).filter((t) => t.n >= 6 && !t.faded)
+      .sort((a, z) => a.y - z.y || z.x - a.x).slice(0, 40).map((t, i) => ({ id: i + 1, x: t.x, y: t.y, w: t.w, h: t.h })) : [];
+    const fs = Math.max(12, Math.round(c.height / 90)), lw = Math.max(2, Math.round(c.height / 700));
+    g.lineWidth = lw; g.font = `bold ${fs}px sans-serif`; g.textBaseline = 'top';
+    for (const m of marks) {
+      const x = m.x / 100 * c.width - lw * 2, y = m.y / 100 * c.height - lw * 2, w = m.w / 100 * c.width + lw * 4, h = m.h / 100 * c.height + lw * 4;
+      g.strokeStyle = '#e0002a'; g.strokeRect(x, y, w, h);
+      const label = String(m.id), tw = g.measureText(label).width + 6, ly = y - fs - 4 >= 0 ? y - fs - 4 : y + h + 2; // label outside the frame
+      g.fillStyle = '#e0002a'; g.fillRect(x, ly, tw, fs + 4);
+      g.fillStyle = '#fff'; g.fillText(label, x + 3, ly + 2);
+    }
+    return { msg: { data: c.toDataURL('image/jpeg', 0.88).split(',')[1], mime: 'image/jpeg', w: c.width, h: c.height, ...(marks.length && { marks }) }, px, clean: src };
   };
   // Pages served from another host (MangaDex's image servers, most CDNs) taint the canvas: no pixels, so
   // no box fitting, no source-sized font, no missed-text pass - raw model boxes only (real reports: huge
@@ -506,6 +522,10 @@
                 for (let y = Math.floor(cy / 100 * H); y < (cy + ch) / 100 * H; y += 2) for (let x = Math.floor(cx / 100 * W); x < (cx + cw) / 100 * W; x += 2) {
                   const i = (y * W + x) * 4;
                   if (Math.abs(d[i] - bg[0]) + Math.abs(d[i + 1] - bg[1]) + Math.abs(d[i + 2] - bg[2]) < 150) continue;
+                  // ink inside another line's box is that line's to erase (a bubble split in two lobes: the second
+                  // lobe's letters counted as this one's leftover, live 66dcdbac/8)
+                  const X = x / W * 100, Y = y / H * 100;
+                  if (separated.some((u) => u !== t && X >= u.x && X <= u.x + u.w && Y >= u.y && Y <= u.y + u.h)) continue;
                   ink++;
                   const qx = Math.floor((x - px0) * c.pw / (c.w / 100 * W)), qy = Math.floor((y - py0) * c.ph / (c.h / 100 * H));
                   if (qx < 0 || qy < 0 || qx >= c.pw || qy >= c.ph || !c.data[(qy * c.pw + qx) * 4 + 3]) left++;
@@ -514,7 +534,8 @@
                 const light = 0.299 * bg[0] + 0.587 * bg[1] + 0.114 * bg[2] > 200;
                 // measured live: well-erased bubbles leave 0-1% of their lettering; a half-lifted logo 15%, a subtitle
                 // 44%, a bubble whose first line "HOW" stayed 23% (6b101d55/7)
-                if (light && ink > 40 && left > 0.1 * ink) { c = null; solid = er; }
+                // bubbles erased stroke by stroke normally leave up to ~12% (66dcdbac/8, looks clean): 20% for them
+                if (light && ink > 40 && left > (t.kind === 'box' ? 0.1 : 0.2) * ink) { c = null; solid = er; }
               }
               if (c) {
                 patch = document.createElement('canvas');
@@ -781,6 +802,15 @@
             const f = dup.full || dup, x0 = Math.min(f.x, x.x), y0 = Math.min(f.y, x.y);
             dup.full = { ...f, x: x0, y: y0, w: Math.max(f.x + f.w, x.x + x.w) - x0, h: Math.max(f.y + f.h, x.y + x.h) - y0 };
             if (dup.fit === 'kept') Object.assign(dup, { x: x.x, y: x.y, w: x.w, h: x.h, fit: x.fit }); // the crop found its real place
+            return false;
+          }));
+          // a crop that copied back a line already verified on the page (the crop prompt asks for that when its
+          // text only continues that line): the line stays where it is and also erases the crop's lettering
+          extra.splice(0, extra.length, ...extra.filter((x) => {
+            const same = res.bubbles.find((b) => b.fit && b.fit !== 'kept' && norm(b.text) === norm(x.text));
+            if (!same) return true;
+            const f = same.full || same, x0 = Math.min(f.x, x.x), y0 = Math.min(f.y, x.y);
+            same.full = { ...f, x: x0, y: y0, w: Math.max(f.x + f.w, x.x + x.w) - x0, h: Math.max(f.y + f.h, x.y + x.h) - y0 };
             return false;
           }));
           const again = new Set(extra.map((x) => norm(x.text)));

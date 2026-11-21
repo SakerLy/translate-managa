@@ -14,6 +14,7 @@ Các bản tạm "ver 0.6.0" … "ver 0.8.0" (19–20/11/2026) chưa được te
 - **Nút "+" ở chỗ còn chữ chưa dịch:** bấm để dịch riêng chỗ đó; chỉ hiện ở chỗ điểm ảnh xác nhận là chữ.
 - **Trí nhớ AI theo bộ truyện mở rộng:** danh sách nhân vật, học từ câu bạn sửa (bấm đúp vào bản dịch), model trau chuốt riêng.
 - **Kéo để chỉnh vị trí bản dịch:** kéo một ô để di chuyển, Shift+kéo để đổi cỡ. Vị trí được nhớ cho trang đó (F5 vẫn giữ). Extension so chỗ bạn đặt với chỗ AI đặt ban đầu; khi một model liên tục đặt lệch cùng một hướng (từ 4 lần sửa, ít nhất 0,8% trang), các trang sau tự dời ô của model đó theo độ lệch ấy trước khi khớp vào chữ.
+- **Đánh số khối chữ trên ảnh gửi cho AI** (học từ các bộ dịch manga mã nguồn mở: máy tự tìm chữ, AI chỉ đọc và dịch). Chữ extension tìm được bằng điểm ảnh được đóng khung đỏ đánh số trên bản ảnh gửi đi; AI ghi số khung cho từng câu và câu đó được đặt đúng vào khung, không phụ thuộc toạ độ AI đoán. Chữ không có khung (chữ trắng nền đen, SFX…) vẫn dùng toạ độ của AI như cũ. Thử với GPT: trang từng bị đảo x/y hàng loạt giờ đặt đúng mọi câu; "I WONDER WHO…" về đúng chỗ thay vì bị gán sang chữ "THROB".
 - **Cài đặt số trang dịch trước** (0–10).
 - Hiện số phiên bản trong popup và trang cài đặt.
 
@@ -61,8 +62,10 @@ Các bản tạm "ver 0.6.0" … "ver 0.8.0" (19–20/11/2026) chưa được te
 **Kiểm tra với GPT trên 4 bộ manga Nhật mới (MangaDex)**
 - Trang scan độ phân giải thấp (650×924) được phóng to tối đa 1,6 lần trước khi phân tích và gửi cho model: chữ nhỏ nét mảnh trước không xác minh được nên bản dịch bị dời đi chỗ khác.
 - Chữ viết tay liền nét ("OUCH" một nét liền) được nhận là một từ, không còn bị coi là "không có chữ" rồi dời bản dịch lên tóc nhân vật.
+- Chữ viết ngay dưới bong bóng (phần tiếp của câu trong bong bóng) không còn bị dịch bù thành một mẩu riêng ("Làm…"): lượt dịch bù chép lại câu đã có, câu đó giữ nguyên chỗ và xoá luôn phần chữ tiếng Anh bên dưới.
 - Lượt dịch bù: bỏ câu bịa ra từ một vết bẩn (vết máu trên băng đầu thành "Tôi…"), bỏ câu chỉ đọc lại một phần bong bóng đã dịch ở chỗ khác.
-- Bong bóng xoá còn sót cả một dòng chữ gốc (từ 10% nét chữ trở lên; bong bóng xoá tốt chỉ còn 0-1%) được thay bằng tấm nền phủ kín.
+- Bong bóng xoá còn sót cả một dòng chữ gốc (từ 20% nét chữ trở lên; bong bóng xoá tốt còn 0-12%) được thay bằng tấm nền phủ kín; nét chữ thuộc câu khác trong cùng bong bóng không bị tính là sót.
+- Ô một dòng chữ Latin cao gấp 4 lần bề ngang (GPT đảo x/y, như "RIGHT…?") được đảo lại kể cả khi trang không có ô đảo nào khác.
 - Ô chữ trên tranh mà model khoanh quá rộng (nửa khung truyện) lại bị bỏ như trước, để lượt dịch bù dịch đúng chỗ chữ thật.
 
 **Kéo ô bản dịch**

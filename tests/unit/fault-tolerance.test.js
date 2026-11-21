@@ -95,6 +95,21 @@ let n = 0;
   assert.ok(Math.abs(p[2].y - 900 / 1087 * 100) < 0.1 && Math.abs(p[2].x + p[2].w - 760 / 768 * 100) < 0.1, JSON.stringify(p[2]));
   assert.equal(parse(J(B([100, 100, 200, 300], 'x')), { w: 768, h: 1087 })[0].y, 10, '0-1000 answers untouched');
   console.log('pixel scale OK');
+  // numbered text blocks: a line tied to frames sits on them (union); a broken box doesn't matter; no number =
+  // the model's own box; lines sharing one frame are not "stacked on one spot"
+  {
+    const marks = [{ id: 1, x: 10, y: 10, w: 15, h: 8 }, { id: 2, x: 60, y: 40, w: 12, h: 6 }, { id: 3, x: 60, y: 47, w: 12, h: 6 }];
+    const p = parse(J({ ...B([0, 0, 0, 0], 'Một'), marks: [1] }, { ...B([500, 500, 520, 700], 'Hai'), marks: [2, 3] },
+      { ...B([800, 100, 900, 300], 'Ba'), marks: [] }, { ...B([10, 10, 20, 20], 'Bốn'), marks: [99] }), null, marks);
+    const at = (t) => p.find((b) => b.text === t);
+    assert.deepEqual([at('Một').x, at('Một').y, at('Một').w, at('Một').h], [10, 10, 15, 8], 'on frame 1 despite a broken box');
+    assert.ok(at('Hai').marked && Math.abs(at('Hai').h - 13) < 1e-9, 'union of frames 2 and 3');
+    assert.ok(!at('Ba').marked && Math.abs(at('Ba').y - 80) < 1e-9, 'no frame: the model box');
+    assert.ok(at('Bốn') && !at('Bốn').marked, 'unknown frame number: the model box');
+    const same = parse(J(...['A a', 'B b', 'C c'].map((t) => ({ ...B([100, 100, 200, 200], t), marks: [1] }))), null, marks);
+    assert.equal(same.length, 3, 'three lines on one frame are fine');
+  }
+  console.log('numbered text blocks OK');
   // two text stacks in one box (two lobes of a cloud bubble, no outline between): one merged line is split
   {
     const f = {}; vm.createContext(f); vm.runInContext(R('manga-dich/fit.js'), f);

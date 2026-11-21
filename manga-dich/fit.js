@@ -140,11 +140,14 @@ function fitBubbles(px, bubbles, anchor = true) {
   // No lettering to vote on either side (a bubble the block finder misses), yet this answer already swapped
   // 2+ boxes: the shape decides. Latin text written in lines is never a column 2.5x taller than wide in
   // pixels (live GPT 66dcdbac/8: "RIGHT…?" came as a 1.8%x8.8% strip on a face; swapped, it is its bubble).
-  if (!swapAll && bubbles.filter((b) => b.swap).length >= 2) {
+  // A strip 4x taller than wide is wrong for one line of Latin text even when nothing else on the page was swapped
+  // (with numbered text blocks most lines no longer go through the swap vote, so "RIGHT…?" stayed on its own)
+  if (!swapAll) {
+    const k = bubbles.filter((b) => b.swap).length >= 2 ? 2.5 : 4;
     bubbles = bubbles.map((b, i) => {
       const [o, s] = ev[i];
-      if (b.swap || o >= 6 || s >= 6 || /[぀-ヿ㐀-鿿가-힯]/.test(b.src || '') || b.style === 'vertical') return b;
-      const tall = b.h / 100 * H > 2.5 * (b.w / 100 * W);
+      if (b.swap || b.marked || o >= 6 || s >= 6 || /[぀-ヿ㐀-鿿가-힯]/.test(b.src || '') || b.style === 'vertical') return b;
+      const tall = b.h / 100 * H > k * (b.w / 100 * W);
       return tall && b.h / 100 * W > b.w / 100 * H ? { ...swapped(b), swap: true } : b;
     });
   }
