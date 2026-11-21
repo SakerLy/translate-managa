@@ -211,7 +211,11 @@ const call = (msg) => new Promise((res) => listener(msg, null, res));
   // eviction keeps the newest CACHE_MAX entries
   const max = vm.runInContext('CACHE_MAX', ctx), put = vm.runInContext('cachePut', ctx);
   for (let i = 0; i < max + 5; i++) store['c:m:' + i] = { t: i, bubbles: [] };
+  vm.runInContext('cachePuts = 0', ctx); // pruning runs on the first save after a worker start
   await put('c:m:new', []);
+  await put('c:m:next', []); // ...and not again on the next one (it reads all of storage)
+  assert.equal(Object.keys(store).filter((k) => k.startsWith('c:')).length, max + 1, 'no prune on the 2nd save');
+  delete store['c:m:next'];
   const left = Object.keys(store).filter((k) => k.startsWith('c:'));
   assert.equal(left.length, max); assert.ok(!('c:m:0' in store) && 'c:m:new' in store);
 

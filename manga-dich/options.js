@@ -226,19 +226,25 @@ function renderExamples(site, list) {
     return c;
   }) : [Object.assign(document.createElement('span'), { className: 'muted', textContent: 'Chưa có. Bấm đúp vào một bản dịch trên trang truyện để sửa.' })]));
 }
+// Only the fields you edited are sent: the others may be stale (the view doesn't refresh while you type), and
+// sending them overwrote what the AI had just learnt on a page translating meanwhile.
+const edited = new Set();
+const fields = {
+  glossary: () => $('mem-glossary').value.trim(),
+  names: () => $('mem-names').value.split(',').map((s) => s.trim()).filter(Boolean),
+  notes: () => $('mem-notes').value.split('\n').map((s) => s.trim()).filter(Boolean),
+  chars: () => $('mem-chars').value.trim(),
+};
 const saveMem = debounce(async () => {
   const site = $('mem-site').value;
-  if (!site) return;
-  await send({ type: 'mem-save', site, mem: {
-    glossary: $('mem-glossary').value.trim(),
-    names: $('mem-names').value.split(',').map((s) => s.trim()).filter(Boolean),
-    notes: $('mem-notes').value.split('\n').map((s) => s.trim()).filter(Boolean),
-    chars: $('mem-chars').value.trim(),
-  } });
+  if (!site || !edited.size) return;
+  const mem = Object.fromEntries([...edited].map((k) => [k, fields[k]()]));
+  edited.clear();
+  await send({ type: 'mem-save', site, mem });
   flashSaved();
 }, 600);
-for (const id of ['mem-glossary', 'mem-names', 'mem-notes', 'mem-chars']) $(id).addEventListener('input', saveMem);
-$('mem-site').onchange = loadMemSite;
+for (const k of Object.keys(fields)) $('mem-' + k).addEventListener('input', () => { edited.add(k); saveMem(); });
+$('mem-site').onchange = () => { edited.clear(); loadMemSite(); }; // pending edits belong to the series you left
 $('mem-reset').onclick = async () => {
   const site = $('mem-site').value;
   if (!site || !confirm(`Xoá toàn bộ xưng hô và tên riêng AI đã học cho “${$('mem-site').selectedOptions[0]?.textContent || site}”?`)) return;

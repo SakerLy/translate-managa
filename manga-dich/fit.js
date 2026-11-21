@@ -386,10 +386,12 @@ function fitBubbles(px, bubbles, anchor = true) {
       // partly detected.
       // a block counts when at least half of it lies in the fit: the bubble's main lettering block reaching a
       // little past the fit was ignored and the box was cut down to one small word beside it (live 66dcdbac/9)
-      const half = (t) => {
+      // share of a block (in %) that lies inside the fit r (in px)
+      const share = (t) => {
         const ix = Math.min(r[2], (t.x + t.w) * W / 100) - Math.max(r[0], t.x * W / 100), iy = Math.min(r[3], (t.y + t.h) * H / 100) - Math.max(r[1], t.y * H / 100);
-        return ix > 0 && iy > 0 && ix * iy >= 0.5 * (t.w * W / 100) * (t.h * H / 100);
+        return ix > 0 && iy > 0 ? ix * iy / ((t.w * W / 100) * (t.h * H / 100)) : 0;
       };
+      const half = (t) => share(t) >= 0.5;
       const big = blocks.filter((t) => !t.faded && t.n >= 6 && half(t));
       // a short word (3-5 letters) right next to that lettering is its last line, not a speck: "YOU." under
       // "I'LL KILL" was cut off and left unerased (live GPT 66dcdbac/10). A lone speck far off still doesn't count.
@@ -398,10 +400,6 @@ function fitBubbles(px, bubbles, anchor = true) {
         && big.some((c) => gap(t, c) < 2 * t.h * H / 100)));
       // ...and only when no bigger block is cut through: one lobe of a split bubble covers part of the whole
       // bubble's block, and clamping it to the small word inside left the rest of its English (live GPT 66dcdbac/9)
-      const share = (t) => {
-        const ix = Math.min(r[2], (t.x + t.w) * W / 100) - Math.max(r[0], t.x * W / 100), iy = Math.min(r[3], (t.y + t.h) * H / 100) - Math.max(r[1], t.y * H / 100);
-        return ix > 0 && iy > 0 ? ix * iy / ((t.w * W / 100) * (t.h * H / 100)) : 0;
-      };
       const cutThrough = blocks.some((t) => !t.faded && t.n >= 6 && share(t) > 0.1 && share(t) < 0.5);
       if (inR.length && !cutThrough && (!b.kind || b.kind === 'bubble')) {
         const pad = Math.max(P + 2, Math.round(0.006 * H));

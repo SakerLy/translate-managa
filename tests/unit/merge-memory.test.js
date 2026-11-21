@@ -145,7 +145,7 @@ const call = (msg) => new Promise((res) => listener(msg, null, res));
       },
       location: { hostname: 'mangadex.org' },
       addEventListener() {}, setInterval() {}, alert() {},
-      wrapText: undefined, hasText: undefined, fitBubbles: undefined,
+      hasText: undefined, fitBubbles: undefined,
     };
     vm.createContext(cctx);
     // chỉ nạp hàm separate: bọc IIFE rồi expose

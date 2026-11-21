@@ -32,6 +32,7 @@ let n = 0;
   // Groq per-minute cap without a countdown: wait the minute out (live: every polish of a page failed)
   assert.equal(reset('Request too large for model `qwen/qwen3.8-27b` on output tokens per minute (OTPM): Limit 1000, Requested 1260.'), 60);
   assert.equal(reset('500 internal error'), 0);
+  assert.equal(reset('Generate content requests per day limit exceeded. Please retry in 17h27m17.32s.'), 0, 'daily cap: no wait');
   console.log('quota wording OK');
 
   // Bug 2: a quota that never clears costs the api() sleeps once, not again per queue retry
@@ -110,6 +111,28 @@ let n = 0;
     assert.equal(f.fitBubbles({ width: W, height: H, data }, [{ x: 25, y: 15, w: 60, h: 40, text: 'Một. Hai.', kind: 'box' }], false).length, 1);
   }
   console.log('two-lobe bubble OK');
+  // GPT placement: half the answer swapped x/y, a box aimed at another box's lettering, and a box no pixel can
+  // judge (a logo) at the end of the answer, after the swapped ones (live GPT pages 66dcdbac/8, aa77c143/4)
+  {
+    const f = {}; vm.createContext(f); vm.runInContext(R('manga-dich/fit.js'), f);
+    const W = 600, H = 600, data = new Uint8ClampedArray(W * H * 4).fill(255);
+    const ink = (x0, y0, x1, y1) => { for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { const i = (y * W + x) * 4; data[i] = data[i + 1] = data[i + 2] = 0; } };
+    const block = (x0, y0) => { for (let r = 0; r < 3; r++) for (let k = 0; k < 7; k++) { const x = x0 + k * 13, y = y0 + r * 20; ink(x, y, x + 2, y + 14); ink(x + 7, y, x + 9, y + 14); ink(x, y + 6, x + 9, y + 8); } };
+    block(60, 60); block(60, 250); block(380, 100); block(240, 420); // A, B, C, D (C, D come back swapped)
+    const B = (x, y, w, h, src, kind = 'bubble') => ({ x, y, w, h, text: src, src, kind });
+    const out = f.fitBubbles({ width: W, height: H, data }, [
+      B(9, 9, 17, 11, 'A'), B(4, 2, 32, 24, 'F aimed at A'), B(9, 40, 17, 11, 'B'),
+      B(16, 62, 11, 17, 'C'), B(69, 39, 11, 17, 'D'), // [x, y] instead of [y, x]
+      B(85, 40, 4, 20, '異世界', 'box'), // blank on both sides: follows the swapped run before it
+    ], false);
+    const at = (s) => out.find((b) => b.src === s);
+    assert.ok(at('C').swap && Math.abs(at('C').x - 63) < 6 && Math.abs(at('C').y - 17) < 6, 'C swapped back: ' + JSON.stringify(at('C')));
+    assert.ok(at('D').swap && Math.abs(at('D').x - 40) < 6 && Math.abs(at('D').y - 70) < 6, 'D swapped back: ' + JSON.stringify(at('D')));
+    assert.ok(at('異世界').swap, 'undecided box follows its swapped neighbours');
+    assert.equal(at('F aimed at A').fit, 'kept', 'a box on lettering another box fits better is unverified');
+    assert.ok(!at('A').swap && at('A').fit !== 'kept', 'correct boxes stay');
+  }
+  console.log('GPT swapped run + misplaced box OK');
   // series name: from the tab title on a reader page, never an id, never a card's glued tags
   {
     const sc = {}; vm.createContext(sc); vm.runInContext(R('manga-dich/series.js'), sc);

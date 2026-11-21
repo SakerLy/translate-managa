@@ -233,6 +233,9 @@ function resetSeconds(msg) {
     const s = (+(m[1] || 0)) * 60 + (+(m[2] || 0));
     return s > 0 && s <= 300 ? s : 0;
   }
+  // a daily cap ("Please retry in 17h27m17s", Gemini free tier) is not worth waiting for: the hours were read as
+  // 17 seconds, and every page slept twice and called twice more before failing
+  if (/(?:try again|retry) (?:in|after) \d+\s*h/i.test(String(msg))) return 0;
   const t = TRY_AGAIN.exec(String(msg));
   // a per-minute cap with no countdown (Groq: "Request too large … on output tokens per minute (OTPM)"): the
   // 5s/10s retries all landed in the same minute and the page lost its polish every time
@@ -644,8 +647,12 @@ async function cacheKey(model, data) {
   const h = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(data)));
   return 'c:' + model + ':v' + CACHE_V + ':' + [...h.slice(0, 16)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
+// Pruning reads ALL of storage (every cached page, draft and memory): on the first save after the worker starts
+// (MV3 restarts it often, a plain counter could never reach its mark), then every 20th - not on every page.
+let cachePuts = 0;
 async function cachePut(key, bubbles) {
   await chrome.storage.local.set({ [key]: { t: Date.now(), bubbles } });
+  if (cachePuts++ % 20) return;
   const all = await chrome.storage.local.get(null);
   const entries = Object.keys(all).filter((k) => /^[cd]:/.test(k));
   if (entries.length > CACHE_MAX) {

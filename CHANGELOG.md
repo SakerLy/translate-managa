@@ -63,6 +63,8 @@ Các bản tạm "ver 0.6.0" … "ver 0.8.0" (19–20/11/2026) chưa được te
 - Sau khi xoá, extension kiểm tra còn bao nhiêu nét chữ gốc lộ ra (đo trên trang thật: bong bóng còn 0-1%, logo xoá dở còn 15%, phụ đề 44%). Khung chữ trên nền sáng còn sót nhiều thì thay bằng một tấm nền phủ kín vùng chữ, như thợ dịch làm với logo không vẽ lại được; tấm nền không lấn sang bản dịch bên cạnh và không bao giờ dùng trên nền tối.
 
 **Xưng hô và trí nhớ**
+- Hết lượt cả ngày ("retry in 17h…", Gemini miễn phí) bị hiểu thành chờ 17 giây: mỗi trang treo ~35 giây và gọi thêm 2 lần vô ích; giờ báo lỗi ngay.
+- Sửa trí nhớ trong trang cài đặt trong lúc đang dịch có thể xoá mất cặp xưng hô/nhân vật AI vừa học: giờ chỉ lưu đúng ô bạn sửa.
 - Trí nhớ không học được gì khi bước trau chuốt lỗi liên tục (hết lượt theo phút của Groq, gateway lỗi): trang giờ báo rõ "chưa trau chuốt được, AI chưa học từ trang này"; lỗi giới hạn theo phút được chờ hết phút thay vì thử lại ngay trong cùng phút.
 - Nhân vật được biết tên sau (ví dụ "Akasumi Goro (thầy giáo)") thay dòng "Thầy giáo" cũ và đổi tên trong bảng xưng hô, không để hai dòng song song.
 - Thêm quy tắc xưng hô: giới tính, khoảng cách tuổi, người yêu chị em, thầy trò / chức danh chốt cả cặp, ngôi số nhiều, lời dẫn phải khớp lời thoại; các trang của một bộ được trau chuốt lần lượt để trang sau dùng điều trang trước vừa học.

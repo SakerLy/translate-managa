@@ -1,54 +1,6 @@
-// Text layout for the inserted translations + a textless-page detector. Pure functions, no DOM,
-// so the very same code runs in the page, in Node tests, and in the Python overlay renderer.
-//   wrapText(t, ar): break a translation into balanced lines that match the bubble's shape.
-//   hasText(px):    does this page carry any letter-sized ink clusters at all?
-
-// Wraps `text` into 1..maxLines lines. A bubble needs few, WIDE lines; a narrow one few, TALL lines:
-// `ar` is the bubble's width/height ratio. Tries every line count and picks the arrangement whose
-// line aspect (widest line / count) is closest to the bubble's - so a "2 words per line" look falls
-// out of the bubble's own shape instead of a fixed rule that fights it. Long words are never split;
-// punctuation keeps Vietnamese semantics (break at spaces, not inside a word).
-// eslint-disable-next-line no-unused-vars
-function wrapText(text, ar, maxLines = 6) {
-  const words = String(text ?? '').trim().split(/\s+/).filter(Boolean);
-  if (words.length <= 1) return words.join(' ') || '';
-
-  // cost(w, h): how square-ish the rendered block is vs the bubble (smaller = better fit)
-  const cost = (w, h) => Math.abs(Math.log((w / h) / ar)); // ratio error, scale-invariant
-
-  // For a given number of lines, distribute words so the longest line is as short as possible:
-  // greedy binary-search on the allowed line length (first-fit packing, O(words·log) per count).
-  const layout = (n) => {
-    let lo = Math.max(...words.map((w) => w.length)), hi = words.join(' ').length;
-    let best = null;
-    while (lo <= hi) {
-      const cap = (lo + hi) >> 1;
-      const lines = [];
-      let cur = [];
-      for (const w of words) {
-        const joint = [...cur, w].join(' ').length;
-        if (cur.length && joint > cap) { lines.push(cur); cur = [w]; } else cur.push(w);
-        if (lines.length > n) break;
-      }
-      if (cur.length) lines.push(cur);
-      if (lines.length > n) { lo = cap + 1; continue; } // too tight: lines overflow the count
-      best = lines;
-      hi = cap - 1; // try tighter: fewer chars per line is never worse for the max-length goal
-    }
-    return best;
-  };
-
-  let best = null;
-  for (let n = 1; n <= Math.min(maxLines, words.length); n++) {
-    const lines = layout(n);
-    if (!lines) continue;
-    const w = Math.max(...lines.map((l) => l.join(' ').length));
-    const h = lines.length;
-    const c = cost(w, h);
-    if (!best || c < best.c) best = { lines, c };
-  }
-  return (best?.lines || [words]).map((l) => l.join(' ')).join('\n');
-}
+// Textless-page detector. Pure function, no DOM, so the same code runs in the page and in Node tests.
+//   hasText(px): does this page carry any letter-sized ink clusters at all?
+// (Line breaking lives in fit.js ellipseLines.)
 
 // Textless-page detector, BEFORE any API call: letter-sized ink clusters are counted on a
 // downsampled grayscale of the page. Manga lettering is small, dense and sparse on the page
