@@ -457,7 +457,10 @@ function fitBubbles(px, bubbles, anchor = true) {
       touching = touching.filter((bl) => !flat(bl));
       for (const bl of letters) if (flat(bl)) bl.used = true; // and grow() must not pick it up either
     }
-    if (touching.length < 2) {
+    // one blob shaped like a word is a word: hand-lettered "OUCH" is a single joined stroke (live GPT 6b101d55/5),
+    // and "no text here" sent its line onto a hair strand 17% away
+    const word = (bl) => { const w = bl.x1 - bl.x0 + 1, h = bl.y1 - bl.y0 + 1; return h >= Math.max(6, 0.006 * H) && h <= CHAR && w >= 1.5 * h && bl.n >= 0.15 * w * h; };
+    if (touching.length < 2 && !(touching.length === 1 && word(touching[0]))) {
       // no text under the model's box: it missed the bubble; the nearest text cluster may still be it
       const r = shrink();
       return r ? kept(r, 'shrink') : { b: { ...b, ...style, fit: 'kept' } };
@@ -591,7 +594,9 @@ function anchorToText(px, out) {
   const darkLum = (b) => { const m = /(\d+),\s*(\d+),\s*(\d+)/.exec(b.bg || ''); return m ? 0.299 * m[1] + 0.587 * m[2] + 0.114 * m[3] : 255; };
   // an SFX/art line is drawn on the art, never moved onto a free block of lettering (those are speech): GPT's
   // right spot for "ぇぇぇ…" was swapped for a block on a boy's face (live 822342aa/7)
-  const fixedKind = (b) => b.kind === 'sfx' || b.kind === 'art';
+  // ...at a plausible size only: a giant unverified art box (GPT boxed half a panel for "I WONDER WHO…") must
+  // still be dropped so the missed-text pass translates the real lettering in place (live GPT 6b101d55/7)
+  const fixedKind = (b) => (b.kind === 'sfx' || b.kind === 'art') && b.w * b.h <= 150;
   const stays = out.filter((b) => b.fit === 'kept' && (darkLum(b) < 60 || fixedKind(b)));
   good = good.concat(stays);
   const kept = out.filter((b) => b.fit === 'kept' && darkLum(b) >= 60 && !fixedKind(b)).concat(good.filter((b) => stray(b) && !fixedKind(b)));
@@ -608,7 +613,9 @@ function anchorToText(px, out) {
     const ratio = (t.w * t.h) / Math.max(0.01, b.w * b.h);
     // the size test only guards against tiny far blocks; a wrong-shaped box (a wide strip drawn for a tall
     // bubble, live report) may still belong to the block it overlaps or sits next to
-    if (t.n >= 6 && ratio > 0.05 && (d < 18 || covers(t, b))) pairs.push({ i, j, d: covers(t, b) ? d / 4 : d }); // a block under the box wins
+    // ratio < 3: a one-word line never belongs to a block 3x its size - "OUCH!" (unverified small lettering,
+    // GPT's box right) jumped 17% onto a hair "block" and its bubble stayed English (live GPT 6b101d55/5)
+    if (t.n >= 6 && ratio > 0.05 && ratio < 3 && (d < 18 || covers(t, b))) pairs.push({ i, j, d: covers(t, b) ? d / 4 : d }); // a block under the box wins
   }));
   pairs.sort((a, b) => a.d - b.d);
   const usedK = new Set(), usedF = new Set(), moved = [];

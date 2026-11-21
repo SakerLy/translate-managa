@@ -187,7 +187,7 @@
     // the series title in 5px text inside its own black block)
     if (src) hi = Math.max(lo, Math.min(hi, Math.max(13, Math.round(src * (st === 'big' || st === 'shout' ? 1.9 : 1.5)))));
     const best = search(b, lo, hi);
-    if (src && best < src * 0.9 && !b.dataset.grown && b.dataset.box) {
+    if (src && best < src * 0.9 && !b.dataset.grown && !b.dataset.user && b.dataset.box) { // a box you placed keeps your size
       const [x, y, w, h] = JSON.parse(b.dataset.box);
       const w2 = Math.min(100, w * 1.3), h2 = Math.min(100, h * 1.2);
       const nx = Math.max(0, Math.min(100 - w2, x - (w2 - w) / 2)), ny = Math.max(0, Math.min(100 - h2, y - (h2 - h) / 2));
@@ -201,10 +201,14 @@
   };
 
   const grab = (src, w, h) => {
-    const k = Math.min(1, 1568 / Math.max(w, h)); // Claude's useful max edge
+    // Claude's useful max edge. Small scans are scaled UP to it (at most 1.6x), as an editor would before working
+    // on them: on a 650x924 page (live MangaDex 6b101d55/5) "OUCH!" was 10px of hair-thin strokes the pixel fit
+    // could not verify, and the model reads small lettering better on a bigger image too.
+    const k = Math.min(1.6, 1568 / Math.max(w, h));
     const c = document.createElement('canvas');
     c.width = Math.round(w * k); c.height = Math.round(h * k);
     const g = c.getContext('2d');
+    g.imageSmoothingQuality = 'high';
     g.drawImage(src, 0, 0, c.width, c.height);
     // pixels stay in the page (for fitBubbles); only the JPEG goes to the worker. Throws on a tainted canvas.
     return { msg: { data: c.toDataURL('image/jpeg', 0.88).split(',')[1], mime: 'image/jpeg', w: c.width, h: c.height }, px: g.getImageData(0, 0, c.width, c.height), clean: src };
@@ -228,7 +232,7 @@
     setBox(b, nx, ny, w2, h2);
   };
   const harmonize = (el) => {
-    const plain = [...el.querySelectorAll('.md-b')].filter((b) => !b.dataset.style || b.dataset.style === 'narration');
+    const plain = [...el.querySelectorAll('.md-b')].filter((b) => (!b.dataset.style || b.dataset.style === 'narration') && !b.dataset.user); // your boxes keep your size
     if (plain.length < 3) return;
     const sizes = plain.map((b) => parseFloat(b.style.fontSize)).sort((a, z) => a - z);
     const med = sizes[sizes.length >> 1];
@@ -323,6 +327,11 @@
             ...(first.kind && { kind: first.kind }), ...(first.style && { style: first.style }), ...(first.sfx && { sfx: true }), rec: true }];
         });
         found = typeof fitBubbles === 'function' ? fitBubbles(px, placed, false) : placed;
+        // A crop of a false block (a blood smudge on a bandage, live GPT 6b101d55/5) got an invented line ("Tôi…")
+        // drawn as a blob over a face. On light paper real lettering is always verified by the fit; a recovered
+        // line with no letters under it there came from nothing. (On dark art white text can't be verified: kept.)
+        const lum = (b) => { const m = /(\d+),\s*(\d+),\s*(\d+)/.exec(b.bg || ''); return m ? 0.299 * m[1] + 0.587 * m[2] + 0.114 * m[3] : 255; };
+        found = found.filter((b) => !(b.fit === 'kept' && lum(b) > 200));
       }
     } catch { /* recovery is best-effort */ }
     o.status.remove();
@@ -503,8 +512,9 @@
                 }
                 // light panels only: a box GPT misplaced onto a black suit became a black slab over the character
                 const light = 0.299 * bg[0] + 0.587 * bg[1] + 0.114 * bg[2] > 200;
-                // measured live: bubbles leave 0-1% of their lettering, the half-lifted logo 15%, a subtitle 44%
-                if (light && ink > 40 && left > (t.kind === 'box' ? 0.1 : 0.3) * ink) { c = null; solid = er; }
+                // measured live: well-erased bubbles leave 0-1% of their lettering; a half-lifted logo 15%, a subtitle
+                // 44%, a bubble whose first line "HOW" stayed 23% (6b101d55/7)
+                if (light && ink > 40 && left > 0.1 * ink) { c = null; solid = er; }
               }
               if (c) {
                 patch = document.createElement('canvas');
@@ -590,7 +600,10 @@
           if (b.classList.contains('editing') || e.button !== 0) return;
           b.endDrag?.(); // a drag whose release never arrived (pointer lost): drop its listeners first
           try { b.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
-          const L = el.getBoundingClientRect(), [x0, y0, w0, h0] = JSON.parse(b.dataset.box), sx = e.clientX, sy = e.clientY, resize = e.shiftKey;
+          // start from the box as shown, not dataset.box: the auto-fit and harmonize widen a box on screen only, and
+          // dragging from the smaller stored box shrank the text the moment it moved (live report)
+          const L = el.getBoundingClientRect(), sx = e.clientX, sy = e.clientY, resize = e.shiftKey;
+          const [x0, y0, w0, h0] = ['left', 'top', 'width', 'height'].map((k, i) => parseFloat(b.style[k]) || JSON.parse(b.dataset.box)[i]);
           dragged = false;
           const mv = (ev) => {
             if (!dragged && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 4) return; // a click, not a drag
@@ -762,7 +775,9 @@
           const near = (x, b) => x.x < b.x + b.w * 1.5 && x.x + x.w > b.x - b.w * 0.5 && x.y < b.y + b.h * 1.5 && x.y + x.h > b.y - b.h * 0.5;
           extra.splice(0, extra.length, ...extra.filter((x) => {
             const dup = res.bubbles.find((b) => norm(b.text) !== norm(x.text) && near(x, b) && (similar(x.text, b.text) || similar(x.src, b.src)));
-            if (!dup) return true;
+            // the same sentence already translated and verified anywhere else on the page: the crop (cut around a
+            // false block - collar ruffles, live GPT 6b101d55/5) only re-read a bit of that bubble. Drop it.
+            if (!dup) return !res.bubbles.some((b) => b.fit && b.fit !== 'kept' && norm(b.text) !== norm(x.text) && similar(x.text, b.text));
             const f = dup.full || dup, x0 = Math.min(f.x, x.x), y0 = Math.min(f.y, x.y);
             dup.full = { ...f, x: x0, y: y0, w: Math.max(f.x + f.w, x.x + x.w) - x0, h: Math.max(f.y + f.h, x.y + x.h) - y0 };
             if (dup.fit === 'kept') Object.assign(dup, { x: x.x, y: x.y, w: x.w, h: x.h, fit: x.fit }); // the crop found its real place

@@ -58,6 +58,16 @@ Các bản tạm "ver 0.6.0" … "ver 0.8.0" (19–20/11/2026) chưa được te
 - Bước trau chuốt có thêm quy tắc của editor/typesetter: câu dịch không dài hơn bản nháp (bong bóng không to ra), tên katakana phiên âm Latin chứ không đổi thành từ tiếng Anh, dấu câu kiểu sách Việt ("…", "?!", "—"), SFX 1-3 âm tiết tượng thanh tiếng Việt.
 - Ngắt dòng không để một chữ lẻ trơ trọi ở dòng cuối của bong bóng.
 
+**Kiểm tra với GPT trên 4 bộ manga Nhật mới (MangaDex)**
+- Trang scan độ phân giải thấp (650×924) được phóng to tối đa 1,6 lần trước khi phân tích và gửi cho model: chữ nhỏ nét mảnh trước không xác minh được nên bản dịch bị dời đi chỗ khác.
+- Chữ viết tay liền nét ("OUCH" một nét liền) được nhận là một từ, không còn bị coi là "không có chữ" rồi dời bản dịch lên tóc nhân vật.
+- Lượt dịch bù: bỏ câu bịa ra từ một vết bẩn (vết máu trên băng đầu thành "Tôi…"), bỏ câu chỉ đọc lại một phần bong bóng đã dịch ở chỗ khác.
+- Bong bóng xoá còn sót cả một dòng chữ gốc (từ 10% nét chữ trở lên; bong bóng xoá tốt chỉ còn 0-1%) được thay bằng tấm nền phủ kín.
+- Ô chữ trên tranh mà model khoanh quá rộng (nửa khung truyện) lại bị bỏ như trước, để lượt dịch bù dịch đúng chỗ chữ thật.
+
+**Kéo ô bản dịch**
+- Chữ tự thu nhỏ khi kéo: ô kéo đi bắt đầu từ cỡ lưu ban đầu thay vì cỡ đang hiện (đã được nới cho vừa chữ Việt). Giờ giữ đúng cỡ đang thấy; ô bạn đã đặt cũng không bị tự nới hay tự chỉnh cỡ chữ theo trang nữa.
+
 **Trang tiêu đề (logo, phụ đề, credit)**
 - GPT hay chuyển sang trả toạ độ đảo x/y từ giữa câu trả lời trở đi; ô không kiểm chứng được bằng điểm ảnh (logo, credit) giờ đi theo các ô quanh nó trong câu trả lời: trước và sau đều bị đảo thì đảo theo. Logo, phụ đề và ba dòng credit về đúng chỗ.
 - Sau khi xoá, extension kiểm tra còn bao nhiêu nét chữ gốc lộ ra (đo trên trang thật: bong bóng còn 0-1%, logo xoá dở còn 15%, phụ đề 44%). Khung chữ trên nền sáng còn sót nhiều thì thay bằng một tấm nền phủ kín vùng chữ, như thợ dịch làm với logo không vẽ lại được; tấm nền không lấn sang bản dịch bên cạnh và không bao giờ dùng trên nền tối.
