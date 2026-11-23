@@ -38,6 +38,9 @@ Các bản tạm "ver 0.6.0" … "ver 0.8.0" (19–20/11/2026) chưa được te
 - Hai bong bóng sát nhau / hai thùy của một bong bóng bị gộp thành một câu: tách lại về đúng chỗ.
 - Tiêu đề, credit, khung chữ trắng nền đen bị lật nhầm trục hoặc dời sang bong bóng khác.
 - Chữ gốc dọc không còn dựng chữ Việt theo chiều dọc; cỡ chữ dịch không dưới ~13px; khung dẫn truyện không in nghiêng.
+- Chữ dịch tràn qua viền bong bóng hẹp và đè lên bong bóng bên cạnh (kiểm tra trên Brave thật, Dragon Musume 146/4): bước đồng đều cỡ chữ nới ô trước khi biết viền bong bóng, rồi không kéo về. Giờ mỗi lần căn chữ, ô được kẹp lại trong viền bong bóng.
+- Bong bóng trong suốt (thấy tóc, lưới nền phía sau chữ) thành khối xám đặc to hơn bong bóng (Gokuaku 623565ad/10): nét tranh phía sau bị đếm là "chữ gốc còn sót" (46%) nên bản xoá sạch bị bỏ. Giờ chỉ đếm trong vùng chữ bộ dò tìm thấy (11%), giữ bản xoá, và bản dịch nằm đúng vùng chữ gốc, xếp dòng theo hình chữ nhật.
+- Khung dẫn truyện xoá sạch vẫn bị thay bằng khối trắng to hơn khung (Gokuaku 4e141a79/20): chính đường viền của khung bị tính là chữ còn sót (10,5%, ngưỡng 10%). Giờ bỏ qua dải sát mép khung khi kiểm tra (còn 0,4%).
 
 **Bỏ sót chữ**
 - Dịch bù của trang đang đọc phải chờ các trang sau dịch xong mới chạy: lượt dịch bù không được ưu tiên nên xếp cuối hàng, sau các trang đọc trước. Giờ dịch bù của trang đang hiện trên màn hình và mọi lần bấm "+" đều được ưu tiên, có một chỗ chạy dự phòng riêng (việc thường vẫn tối đa 2 lượt gọi cùng lúc).
@@ -77,6 +80,8 @@ Các bản tạm "ver 0.6.0" … "ver 0.8.0" (19–20/11/2026) chưa được te
 - Ô chữ trên tranh mà model khoanh quá rộng (nửa khung truyện) lại bị bỏ như trước, để lượt dịch bù dịch đúng chỗ chữ thật.
 
 **Kéo ô bản dịch**
+- Kéo một ô thả lên bong bóng thì ô tự khớp vào bong bóng đó như lúc dịch tự động: tìm chữ gốc dưới chỗ thả, xoá chữ gốc, đặt bản dịch trong viền. Trước đây ô giữ nguyên hình chữ nhật nền xám, đè lên chữ gốc. Thả lên tranh (không có chữ), lên bong bóng đã có bản dịch khác, hoặc Shift+kéo đổi cỡ thì giữ đúng như bạn đặt.
+- **Alt+bấm** vào ô đã kéo để trả về chỗ tự động (xoá vị trí đã lưu).
 - Chữ tự thu nhỏ khi kéo: ô kéo đi bắt đầu từ cỡ lưu ban đầu thay vì cỡ đang hiện (đã được nới cho vừa chữ Việt). Giờ giữ đúng cỡ đang thấy; ô bạn đã đặt cũng không bị tự nới hay tự chỉnh cỡ chữ theo trang nữa.
 
 **Trang tiêu đề (logo, phụ đề, credit)**
@@ -98,6 +103,7 @@ Các bản tạm "ver 0.6.0" … "ver 0.8.0" (19–20/11/2026) chưa được te
 - Hết lượt "Reset after…" viết hoa / "try again in 18s" không được chờ; hết lượt kéo dài bị chờ chồng (9 lần gọi còn 3).
 - Model "suy nghĩ" kèm `<think>`/câu dẫn trước JSON, câu trả lời bị cắt giữa chừng.
 - "Extension context invalidated" sau khi cập nhật extension; popup tràn ngang; "dịch trước = 0" vẫn dịch trước.
+- Trang lỗi của extension đầy "Identifier 'textBlocksMemo' has already been declared": MangaDex chuyển chương không tải lại trang nên `fit.js` được nạp lần hai vào cùng trang.
 
 ### Đang chờ kiểm tra
 Những lỗi bạn đã báo mà bản sửa chưa được xác nhận trên trang thật:

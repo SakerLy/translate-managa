@@ -200,6 +200,9 @@
     Object.assign(b.style, { left: x + '%', top: y + '%', width: w + '%', height: h + '%' });
   };
   const fit = (b) => {
+    // the bubble's outline arrives after the first fit (erase step): a box harmonize() already widened stayed past
+    // it, its lines spilling over the art and the next bubble (live Dragon Musume 146/4). Pull it back in first.
+    if (b.dataset.limit && !b.dataset.user) setBox(b, ...['left', 'top', 'width', 'height'].map((k) => parseFloat(b.style[k]) || 0));
     const st = b.dataset.style || '';
     let lo = 8, hi = 30;
     if (st === 'big' || st === 'shout') hi = 38;
@@ -502,7 +505,7 @@
         b.dataset.ar = t.w / t.h;
         if (t.lh || pageLh) b.dataset.lh = t.lh || pageLh;
         b.dataset.box = JSON.stringify([t.x, t.y, t.w, t.h]);
-        b.title = 'Bấm: ẩn/hiện bản dịch · Bấm đúp: sửa câu · Kéo: di chuyển · Shift+kéo: đổi cỡ';
+        b.title = 'Bấm: ẩn/hiện bản dịch · Bấm đúp: sửa câu · Kéo: di chuyển · Shift+kéo: đổi cỡ · Alt+bấm: trả về chỗ tự động';
         Object.assign(b.style, { left: t.x + '%', top: t.y + '%', width: t.w + '%', height: t.h + '%' },
           t.bg && { background: t.bg, color: t.fg }); // dark/coloured bubbles keep their look
         if (faded) b.style.opacity = '.75';
@@ -517,7 +520,48 @@
         }
         // Erasing and the slant are pixel work (~50-100ms a box): done in small chunks after the page is drawn,
         // so scrolling never freezes while a page is being translated (live report: the page stuttered)
+        const addPatch = (c) => {
+          patch?.remove();
+          patch = document.createElement('canvas');
+          patch.className = 'md-patch';
+          patch.width = c.pw; patch.height = c.ph;
+          patch.getContext('2d').putImageData(new ImageData(c.data, c.pw, c.ph), 0, 0);
+          Object.assign(patch.style, { left: c.x + '%', top: c.y + '%', width: c.w + '%', height: c.h + '%' });
+          patches.append(patch);
+          b.classList.add('clean');
+        };
+        // A line dropped onto lettering takes that bubble over the way the automatic pass would have placed it
+        // (live report: a dragged line stayed a grey slab wider than its narrow bubble, the English still under it):
+        // the letters under the drop are found, the box fitted to them, the source erased and the text laid inside
+        // the bubble's outline. Dropped on the art, or nothing verifiable there: it stays exactly where it was put.
+        const snap = () => {
+          if (!o.px || typeof textBlocks !== 'function' || typeof fitBubbles !== 'function') return;
+          const [x, y, w, h] = JSON.parse(b.dataset.box);
+          const over = (k, q) => Math.max(0, Math.min(k.x + k.w, q[0] + q[2]) - Math.max(k.x, q[0])) * Math.max(0, Math.min(k.y + k.h, q[1] + q[3]) - Math.max(k.y, q[1]));
+          // lettering another translation already holds is not free: two lines dropped near one bubble were both
+          // snapped onto it and drawn over each other and its own line (live Gokuaku 4e141a79/20)
+          const others = [...el.querySelectorAll('.md-b')].filter((q) => q !== b && q.dataset.box).map((q) => JSON.parse(q.dataset.box));
+          const under = textBlocks(o.px).filter((k) => !k.faded && over(k, [x, y, w, h]) >= 0.5 * k.w * k.h && !others.some((q) => over(k, q) >= 0.3 * k.w * k.h));
+          if (!under.length) return;
+          const x0 = Math.min(...under.map((k) => k.x)), y0 = Math.min(...under.map((k) => k.y));
+          const x1 = Math.max(...under.map((k) => k.x + k.w)), y1 = Math.max(...under.map((k) => k.y + k.h));
+          const [f] = fitBubbles(o.px, [{ ...t, x: x0, y: y0, w: x1 - x0, h: y1 - y0 }], false);
+          if (!f || !f.fit || f.fit === 'kept') return;
+          const c = typeof cleanPatch === 'function' ? cleanPatch(o.px, { ...f, kind: t.kind || 'bubble' }) : null;
+          let box = [f.x, f.y, f.w, f.h];
+          if (c) {
+            addPatch(c);
+            const n = c.inner, pad = 0.08;
+            if (n) box = [n.x + n.w * pad, n.y + n.h * pad, n.w * (1 - 2 * pad), n.h * (1 - 2 * pad)];
+          }
+          if (f.bg) { b.style.setProperty('--md-bg', f.bg); Object.assign(b.style, { background: f.bg, color: f.fg || '' }); }
+          Object.assign(b.style, { left: box[0] + '%', top: box[1] + '%', width: box[2] + '%', height: box[3] + '%', transform: '' });
+          b.dataset.box = JSON.stringify(box); b.dataset.ar = box[2] / box[3];
+          if (f.lh) b.dataset.lh = f.lh;
+        };
         const dress = () => {
+          // a line you placed by hand: its lettering is under YOUR box (the snapped spot from a drop), not the model's
+          if (mine) { snap(); return; }
           const lum = /(\d+),\s*(\d+),\s*(\d+)/.exec(t.bg || '');
           const toned = lum && (() => { const v = 0.299 * lum[1] + 0.587 * lum[2] + 0.114 * lum[3]; return v > 70 && v < 190; })();
           if (o.px && t.fit && t.fit !== 'kept' && !toned && typeof cleanPatch === 'function') {
@@ -536,7 +580,7 @@
                 const x0 = Math.min(er.x, k.x), y0 = Math.min(er.y, k.y);
                 er = { ...er, x: x0, y: y0, w: Math.max(er.x + er.w, k.x + k.w) - x0, h: Math.max(er.y + er.h, k.y + k.h) - y0 };
               }
-              let c = cleanPatch(o.px, er);
+              let c = cleanPatch(o.px, er), seeThrough = null;
               // Erase check, as an editor would look at it: if much of the original lettering under this line is
               // still showing (a decorated title logo only half lifted, live aa77c143/4 - the translation sat on
               // top of the leftover kanji), drop the patch and set the line on a solid panel over the whole
@@ -546,19 +590,36 @@
                 const bg = m ? [+m[1], +m[2], +m[3]] : [255, 255, 255];
                 // a caption/logo box is judged over its whole erase area (the fit's letters were only part of a
                 // decorated logo, the kanji above them stayed); a bubble over its letters (its outline is in the area)
-                const [cx, cy, cw, ch] = t.kind === 'box' ? [er.x, er.y, er.w, er.h] : t.core, px0 = c.x / 100 * W, py0 = c.y / 100 * H;
-                let ink = 0, left = 0;
-                for (let y = Math.floor(cy / 100 * H); y < (cy + ch) / 100 * H; y += 2) for (let x = Math.floor(cx / 100 * W); x < (cx + cw) / 100 * W; x += 2) {
-                  const i = (y * W + x) * 4;
-                  if (Math.abs(d[i] - bg[0]) + Math.abs(d[i + 1] - bg[1]) + Math.abs(d[i + 2] - bg[2]) < 150) continue;
-                  // ink inside another line's box is that line's to erase (a bubble split in two lobes: the second
-                  // lobe's letters counted as this one's leftover, live 66dcdbac/8)
-                  const X = x / W * 100, Y = y / H * 100;
-                  if (separated.some((u) => u !== t && X >= u.x && X <= u.x + u.w && Y >= u.y && Y <= u.y + u.h)) continue;
-                  ink++;
-                  const qx = Math.floor((x - px0) * c.pw / (c.w / 100 * W)), qy = Math.floor((y - py0) * c.ph / (c.h / 100 * H));
-                  if (qx < 0 || qy < 0 || qx >= c.pw || qy >= c.ph || !c.data[(qy * c.pw + qx) * 4 + 3]) left++;
-                }
+                // ...and a bubble only where the detector saw lettering inside its letters' box: a see-through bubble
+                // shows the drawing behind its text, and those hair strokes and tone lines counted as letters left
+                // standing (46%) - the clean erase was thrown away for a grey slab wider than the bubble (live
+                // Gokuaku 623565ad/10: 11% once counted on the lettering alone)
+                const lettering = t.kind === 'box' ? [] : blocks.filter((k) => !k.faded && k.x < t.core[0] + t.core[2] && k.x + k.w > t.core[0] && k.y < t.core[1] + t.core[3] && k.y + k.h > t.core[1]);
+                const lx0 = Math.max(t.core[0], Math.min(...lettering.map((k) => k.x))), ly0 = Math.max(t.core[1], Math.min(...lettering.map((k) => k.y)));
+                // (5% in from its edges: a caption's own frame line runs along them and is never erased - it alone
+                // read 10.5% "left" on a cleanly erased caption, which became a white slab, live Gokuaku 4e141a79/20)
+                const [cx, cy, cw, ch] = t.kind === 'box' ? [er.x + er.w * 0.05, er.y + er.h * 0.05, er.w * 0.9, er.h * 0.9] : !lettering.length ? t.core
+                  : [lx0, ly0, Math.min(t.core[0] + t.core[2], Math.max(...lettering.map((k) => k.x + k.w))) - lx0, Math.min(t.core[1] + t.core[3], Math.max(...lettering.map((k) => k.y + k.h))) - ly0];
+                const px0 = c.x / 100 * W, py0 = c.y / 100 * H;
+                const count = ([cx, cy, cw, ch]) => {
+                  let ink = 0, left = 0;
+                  for (let y = Math.floor(cy / 100 * H); y < (cy + ch) / 100 * H; y += 2) for (let x = Math.floor(cx / 100 * W); x < (cx + cw) / 100 * W; x += 2) {
+                    const i = (y * W + x) * 4;
+                    if (Math.abs(d[i] - bg[0]) + Math.abs(d[i + 1] - bg[1]) + Math.abs(d[i + 2] - bg[2]) < 150) continue;
+                    // ink inside another line's box is that line's to erase (a bubble split in two lobes: the second
+                    // lobe's letters counted as this one's leftover, live 66dcdbac/8)
+                    const X = x / W * 100, Y = y / H * 100;
+                    if (separated.some((u) => u !== t && X >= u.x && X <= u.x + u.w && Y >= u.y && Y <= u.y + u.h)) continue;
+                    ink++;
+                    const qx = Math.floor((x - px0) * c.pw / (c.w / 100 * W)), qy = Math.floor((y - py0) * c.ph / (c.h / 100 * H));
+                    if (qx < 0 || qy < 0 || qx >= c.pw || qy >= c.ph || !c.data[(qy * c.pw + qx) * 4 + 3]) left++;
+                  }
+                  return [ink, left];
+                };
+                const [ink, left] = count([cx, cy, cw, ch]);
+                // see-through bubble (the drawing stays around the erased letters): the translation must stay on the
+                // erased lettering, not spread over the art inside a box wider than the bubble (live Gokuaku 623565ad/10)
+                if (lettering.length && ink > 40 && left <= 0.2 * ink) { const [i2, l2] = count(t.core); if (l2 > 0.2 * i2) seeThrough = [cx, cy, cw, ch]; }
                 // light panels only: a box GPT misplaced onto a black suit became a black slab over the character
                 const light = 0.299 * bg[0] + 0.587 * bg[1] + 0.114 * bg[2] > 200;
                 // measured live: well-erased bubbles leave 0-1% of their lettering; a half-lifted logo 15%, a subtitle
@@ -567,17 +628,19 @@
                 if (light && ink > 40 && left > (t.kind === 'box' ? 0.1 : 0.2) * ink) { c = null; solid = er; }
               }
               if (c) {
-                patch = document.createElement('canvas');
-                patch.className = 'md-patch';
-                patch.width = c.pw; patch.height = c.ph;
-                patch.getContext('2d').putImageData(new ImageData(c.data, c.pw, c.ph), 0, 0);
-                Object.assign(patch.style, { left: c.x + '%', top: c.y + '%', width: c.w + '%', height: c.h + '%' });
-                patches.append(patch);
-                b.classList.add('clean');
+                addPatch(c);
                 // the bubble's own shape is known: a box that spilled past its outline is pulled back inside it,
                 // so the translation is laid out in the bubble, not across its edge
                 const n = c.inner;
                 if (n && !b.dataset.user) b.dataset.limit = JSON.stringify([n.x, n.y, n.w, n.h]);
+                if (!n && seeThrough && !b.dataset.user) {
+                  const [sx, sy, sw, sh] = seeThrough, mx = sw * 0.04, my = sh * 0.04;
+                  const box = [sx - mx, sy - my, sw + 2 * mx, sh + 2 * my];
+                  Object.assign(b.style, { left: box[0] + '%', top: box[1] + '%', width: box[2] + '%', height: box[3] + '%' });
+                  b.dataset.box = JSON.stringify(box); b.dataset.ar = box[2] / box[3];
+                  b.dataset.limit = JSON.stringify(box); // harmonize may not widen it back over the art
+                  delete b.dataset.shape; b.classList.remove('shaped'); b.textContent = b.dataset.raw; // a rectangle of lettering, not an ellipse: oval lines left it at 11px
+                }
                 if (n && !b.dataset.user && n.w * n.h < 0.9 * t.w * t.h) {
                   const pad = 0.08, nx = n.x + n.w * pad, ny = n.y + n.h * pad, nw = n.w * (1 - 2 * pad), nh = n.h * (1 - 2 * pad);
                   Object.assign(b.style, { left: nx + '%', top: ny + '%', width: nw + '%', height: nh + '%' });
@@ -667,9 +730,11 @@
           const up = () => {
             end();
             if (!dragged) return;
-            const box = JSON.parse(b.dataset.box);
-            b.dataset.user = '1'; b.dataset.ar = box[2] / box[3]; b.style.transform = '';
+            b.dataset.user = '1'; b.style.transform = '';
             delete b.dataset.limit; delete b.dataset.grown; delete b.dataset.grownK;
+            if (!resize) snap(); // Shift+drag sets a size on purpose: that one is kept as drawn
+            const box = JSON.parse(b.dataset.box);
+            b.dataset.ar = box[2] / box[3];
             fit(b);
             (o.moves ||= {})[lineKey(t.text)] = box;
             quiet({ type: 'move', key: o.key, text: t.text, box });
@@ -677,8 +742,14 @@
           addEventListener('pointermove', mv); addEventListener('pointerup', up); addEventListener('pointercancel', end);
           b.endDrag = end;
         };
-        b.onclick = () => {
+        b.onclick = (e) => {
           if (dragged) { dragged = false; return; }
+          if (e.altKey && b.dataset.user) { // Alt+click: undo your drag, the line goes back to its automatic spot
+            delete o.moves?.[lineKey(t.text)];
+            quiet({ type: 'move', key: o.key, text: t.text, box: null });
+            draw(list, faded);
+            return;
+          }
           if (b.classList.contains('editing')) return;
           b.classList.toggle('off'); patch?.classList.toggle('off', b.classList.contains('off'));
         };

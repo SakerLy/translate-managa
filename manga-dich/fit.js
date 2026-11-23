@@ -672,7 +672,9 @@ function anchorToText(px, out) {
 // scenes) - the first pass alone never re-read those, so they stayed untranslated.
 // Same pixels, same blocks: computed once per page image (fitBubbles, drawing, recovery and the "+" buttons
 // each asked again - ~130ms a time on the page's main thread)
-const textBlocksMemo = new WeakMap();
+// var, not const: the worker injects fit.js again into the same page (MangaDex switches chapters without a
+// reload) and a second top-level const threw "already declared" (Brave extension errors page)
+var textBlocksMemo = new WeakMap();
 function textBlocks(px) {
   let r = textBlocksMemo.get(px);
   if (!r) textBlocksMemo.set(px, (r = textBlocksIn(px, false).concat(textBlocksIn(px, true))));
@@ -756,34 +758,43 @@ function textBlocksIn(px, invert) {
   // than GAP merge into one glyph; Latin letters just merge into words, whose height is the letters'. GAP
   // scales with the lettering (20% of the tall blobs): う's top stroke and ！'s dot sit 3 cells from a 22-cell
   // body, a fixed 2 left "うん！" as fragments.
+  // Union-find over blobs sorted by x, each compared only with the blobs just right of it (the way letters are
+  // clustered above): near-linear. The first version re-scanned every pair after each merge and ran before the
+  // hatching check - a page of screentone (thousands of dots in one group) pinned a CPU core.
   const glyphHeights = (g) => {
     const hb = g.map((l) => l.y1 - l.y0 + 1).sort((a, z) => a - z);
-    const tall = hb[(hb.length * 0.8) | 0], GAP = Math.max(2, Math.round(0.2 * tall));
-    const c = g.map((l) => ({ x0: l.x0, y0: l.y0, x1: l.x1, y1: l.y1 }));
-    for (let merged = true; merged;) {
-      merged = false;
-      for (let i = 0; i < c.length; i++) for (let j = c.length - 1; j > i; j--) {
+    const tall = hb[(hb.length * 0.8) | 0], GAP = Math.max(2, Math.round(0.2 * tall)), CAP = 1.3 * tall;
+    const c = g.map((l) => ({ x0: l.x0, y0: l.y0, x1: l.x1, y1: l.y1 })).sort((a, z) => a.x0 - z.x0);
+    const up = c.map((_, i) => i), box = c.map((q) => ({ ...q }));
+    const root = (i) => (up[i] === i ? i : (up[i] = root(up[i])));
+    for (let i = 0; i < c.length; i++) {
+      for (let j = i + 1; j < c.length && c[j].x0 <= c[i].x1 + GAP; j++) {
         const a = c[i], b = c[j];
-        if (b.x0 > a.x1 + GAP || a.x0 > b.x1 + GAP || b.y0 > a.y1 + GAP || a.y0 > b.y1 + GAP) continue;
+        if (b.y0 > a.y1 + GAP || a.y0 > b.y1 + GAP) continue;
+        const ra = root(i), rb = root(j);
+        if (ra === rb) continue;
+        const A = box[ra], B = box[rb];
         // a glyph is about as big as its largest stroke: never grow past 1.3x it (that would be two lines
         // or a word merged - a thought bubble's lines came out 66 cells tall and read as "mixed")
-        if (Math.max(a.y1, b.y1) - Math.min(a.y0, b.y0) + 1 > 1.3 * tall || Math.max(a.x1, b.x1) - Math.min(a.x0, b.x0) + 1 > 1.3 * tall) continue;
-        a.x0 = Math.min(a.x0, b.x0); a.y0 = Math.min(a.y0, b.y0); a.x1 = Math.max(a.x1, b.x1); a.y1 = Math.max(a.y1, b.y1);
-        c.splice(j, 1); merged = true;
+        if (Math.max(A.y1, B.y1) - Math.min(A.y0, B.y0) + 1 > CAP || Math.max(A.x1, B.x1) - Math.min(A.x0, B.x0) + 1 > CAP) continue;
+        up[rb] = ra;
+        box[ra] = { x0: Math.min(A.x0, B.x0), y0: Math.min(A.y0, B.y0), x1: Math.max(A.x1, B.x1), y1: Math.max(A.y1, B.y1) };
       }
     }
-    return c.map((q) => q.y1 - q.y0 + 1).sort((a, z) => a - z);
+    return c.map((_, i) => i).filter((i) => root(i) === i).map((i) => box[i].y1 - box[i].y0 + 1).sort((a, z) => a - z);
   };
   for (const g of groups.values()) {
-    // short exclamations ("...NO.", "EH!?", "HẢ?") have 3-5 letters: accept them when the letters are big,
-    // which tone dots and grass never are (live run: "...NO." was never detected)
-    const gh_ = glyphHeights(g);
-    const med = gh_[gh_.length >> 1];
-    if (g.length < 3 || (g.length < 6 && med < 0.012 * Math.max(gw, gh))) continue;
+    // cheap rejections first: too few blobs, a whole panel of hatching, more blobs than any bubble holds
+    if (g.length < 3 || g.length > 1500) continue;
     const x0 = Math.min(...g.map((l) => l.x0)), y0 = Math.min(...g.map((l) => l.y0));
     const x1 = Math.max(...g.map((l) => l.x1)) + 1, y1 = Math.max(...g.map((l) => l.y1)) + 1;
     const bw = x1 - x0, bh = y1 - y0;
     if (bw > 0.5 * gw || bh > 0.5 * gh || bw * bh > 0.08 * gw * gh) continue; // a whole panel of hatching, not text
+    // short exclamations ("...NO.", "EH!?", "HẢ?") have 3-5 letters: accept them when the letters are big,
+    // which tone dots and grass never are (live run: "...NO." was never detected)
+    const gh_ = glyphHeights(g);
+    const med = gh_[gh_.length >> 1];
+    if (g.length < 6 && med < 0.012 * Math.max(gw, gh)) continue;
     // real lettering is a few similar heights; scattered grass/hatching is not. Punctuation (".", ",", the dots
     // of "?!") is far shorter than the letters and made "MASA SIH?!" and "AH, BEGITU YA." look mixed: only
     // marks at least 40% of the median letter height take part.

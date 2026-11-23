@@ -6,6 +6,7 @@ const ROOT = require('path').join(__dirname, '..', '..');
 const fs = require('fs'), vm = require('vm'), path = require('path'), assert = require('assert');
 const ctx = {}; vm.createContext(ctx);
 vm.runInContext(fs.readFileSync(path.join(ROOT, 'manga-dich/fit.js'), 'utf8'), ctx);
+vm.runInContext(fs.readFileSync(path.join(ROOT, 'manga-dich/fit.js'), 'utf8'), ctx); // injected twice into one page must not throw
 const textBlocks = vm.runInContext('textBlocks', ctx);
 
 const W = 768, H = 1087; // a real scan's size: one grid cell per pixel

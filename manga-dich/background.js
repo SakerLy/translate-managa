@@ -1025,7 +1025,15 @@ chrome.runtime.onMessage.addListener((msg, _sender, send) => {
 // fit snaps them onto the lettering. Per model, last 40 corrections; one-off fixes cancel out.
 const lineKey = (t) => String(t || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
 async function moveLine({ key, text, box }) {
-  if (!key || !Array.isArray(box) || box.length !== 4 || !box.every(Number.isFinite)) return { ok: false };
+  if (!key) return { ok: false };
+  if (box === null) { // Alt+click: the line goes back to its automatic spot (the learnt offset keeps what it learnt)
+    const hit = (await chrome.storage.local.get(key))[key];
+    if (!hit?.moves) return { ok: true };
+    delete hit.moves[lineKey(text)];
+    await chrome.storage.local.set({ [key]: hit });
+    return { ok: true };
+  }
+  if (!Array.isArray(box) || box.length !== 4 || !box.every(Number.isFinite)) return { ok: false };
   const hit = (await chrome.storage.local.get(key))[key];
   if (!hit) return { ok: false };
   hit.moves = { ...(hit.moves || {}), [lineKey(text)]: box.map((v) => +v.toFixed(2)) };
