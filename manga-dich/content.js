@@ -505,7 +505,7 @@
         b.dataset.ar = t.w / t.h;
         if (t.lh || pageLh) b.dataset.lh = t.lh || pageLh;
         b.dataset.box = JSON.stringify([t.x, t.y, t.w, t.h]);
-        b.title = 'Bấm: ẩn/hiện bản dịch · Bấm đúp: sửa câu · Kéo: di chuyển · Shift+kéo: đổi cỡ · Alt+bấm: trả về chỗ tự động';
+        b.title = 'Bấm: ẩn/hiện bản dịch · Bấm đúp: sửa câu · Kéo: di chuyển · Kéo mép/góc: đổi cỡ · Alt+bấm: trả về chỗ tự động';
         Object.assign(b.style, { left: t.x + '%', top: t.y + '%', width: t.w + '%', height: t.h + '%' },
           t.bg && { background: t.bg, color: t.fg }); // dark/coloured bubbles keep their look
         if (faded) b.style.opacity = '.75';
@@ -534,7 +534,10 @@
         // (live report: a dragged line stayed a grey slab wider than its narrow bubble, the English still under it):
         // the letters under the drop are found, the box fitted to them, the source erased and the text laid inside
         // the bubble's outline. Dropped on the art, or nothing verifiable there: it stays exactly where it was put.
-        const snap = () => {
+        // from: the box before the drag - lettering it already sat on is its own, so a nudge there is you fine-tuning
+        // the spot, not a drop on a new bubble (live report: a nudged line jumped straight back). keep: only erase the
+        // lettering under the box, never move it (a reload: the spot you chose stays exactly where you left it).
+        const snap = ({ from, keep } = {}) => {
           if (!o.px || typeof textBlocks !== 'function' || typeof fitBubbles !== 'function') return;
           const [x, y, w, h] = JSON.parse(b.dataset.box);
           const over = (k, q) => Math.max(0, Math.min(k.x + k.w, q[0] + q[2]) - Math.max(k.x, q[0])) * Math.max(0, Math.min(k.y + k.h, q[1] + q[3]) - Math.max(k.y, q[1]));
@@ -543,14 +546,16 @@
           const others = [...el.querySelectorAll('.md-b')].filter((q) => q !== b && q.dataset.box).map((q) => JSON.parse(q.dataset.box));
           const under = textBlocks(o.px).filter((k) => !k.faded && over(k, [x, y, w, h]) >= 0.5 * k.w * k.h && !others.some((q) => over(k, q) >= 0.3 * k.w * k.h));
           if (!under.length) return;
+          if (from && under.every((k) => over(k, from) >= 0.3 * k.w * k.h)) return;
           const x0 = Math.min(...under.map((k) => k.x)), y0 = Math.min(...under.map((k) => k.y));
           const x1 = Math.max(...under.map((k) => k.x + k.w)), y1 = Math.max(...under.map((k) => k.y + k.h));
           const [f] = fitBubbles(o.px, [{ ...t, x: x0, y: y0, w: x1 - x0, h: y1 - y0 }], false);
           if (!f || !f.fit || f.fit === 'kept') return;
           const c = typeof cleanPatch === 'function' ? cleanPatch(o.px, { ...f, kind: t.kind || 'bubble' }) : null;
           let box = [f.x, f.y, f.w, f.h];
+          if (c) addPatch(c);
+          if (keep) return;
           if (c) {
-            addPatch(c);
             const n = c.inner, pad = 0.08;
             if (n) box = [n.x + n.w * pad, n.y + n.h * pad, n.w * (1 - 2 * pad), n.h * (1 - 2 * pad)];
           }
@@ -561,7 +566,10 @@
         };
         const dress = () => {
           // a line you placed by hand: its lettering is under YOUR box (the snapped spot from a drop), not the model's
-          if (mine) { snap(); return; }
+          // ...and when nothing is under it (nudged half off its lettering), its own source is still erased as usual: the
+          // steps below never move a box you placed (live report: the English came back after a nudge and F5)
+          const nearOwn = mine && mine[0] < t.x + t.w && t.x < mine[0] + mine[2] && mine[1] < t.y + t.h && t.y < mine[1] + mine[3];
+          if (mine && !nearOwn) { snap({ keep: true }); if (patch) return; } // dropped on another bubble: erase there
           const lum = /(\d+),\s*(\d+),\s*(\d+)/.exec(t.bg || '');
           const toned = lum && (() => { const v = 0.299 * lum[1] + 0.587 * lum[2] + 0.114 * lum[3]; return v > 70 && v < 190; })();
           if (o.px && t.fit && t.fit !== 'kept' && !toned && typeof cleanPatch === 'function') {
@@ -709,33 +717,66 @@
         // Drag a translation to move it, Shift+drag to resize it. The spot is kept for this page and teaches the
         // extension where this model's boxes tend to land (background.js learnPlacement).
         let dragged = false;
+        // Resize by grabbing an edge or a corner (the old way - Shift held before pressing, bottom-right corner only,
+        // text re-laid only on release - was hard to find and to aim, live request). Shift+drag still works.
+        const edges = (ev) => {
+          const r = b.getBoundingClientRect(), z = Math.min(10, r.width / 4, r.height / 4);
+          return { l: ev.clientX - r.left < z, r: r.right - ev.clientX < z, t: ev.clientY - r.top < z, b: r.bottom - ev.clientY < z };
+        };
+        const CURSOR = { lt: 'nwse-resize', rb: 'nwse-resize', rt: 'nesw-resize', lb: 'nesw-resize', l: 'ew-resize', r: 'ew-resize', t: 'ns-resize', b: 'ns-resize' };
+        const cursorOf = (ed) => CURSOR[(ed.l ? 'l' : ed.r ? 'r' : '') + (ed.t ? 't' : ed.b ? 'b' : '')] || '';
+        b.addEventListener('pointermove', (ev) => { if (!b.classList.contains('dragging') && !b.classList.contains('editing')) b.style.cursor = cursorOf(edges(ev)); });
+        b.addEventListener('pointerleave', () => { if (!b.classList.contains('dragging')) b.style.cursor = ''; });
         b.onpointerdown = (e) => {
           if (b.classList.contains('editing') || e.button !== 0) return;
+          // the reader under the box must not take this drag too (MangaDex dimmed the page and opened a side preview)
+          e.preventDefault(); e.stopPropagation();
           b.endDrag?.(); // a drag whose release never arrived (pointer lost): drop its listeners first
           try { b.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
           // start from the box as shown, not dataset.box: the auto-fit and harmonize widen a box on screen only, and
           // dragging from the smaller stored box shrank the text the moment it moved (live report)
-          const L = el.getBoundingClientRect(), sx = e.clientX, sy = e.clientY, resize = e.shiftKey;
+          const L = el.getBoundingClientRect(), sx = e.clientX, sy = e.clientY;
+          let ed = edges(e);
+          if (e.shiftKey && !cursorOf(ed)) ed = { r: true, b: true }; // Shift+drag anywhere: bottom-right corner
+          const resize = !!cursorOf(ed);
           const [x0, y0, w0, h0] = ['left', 'top', 'width', 'height'].map((k, i) => parseFloat(b.style[k]) || JSON.parse(b.dataset.box)[i]);
           dragged = false;
+          let frame = 0;
           const mv = (ev) => {
             if (!dragged && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 4) return; // a click, not a drag
+            if (!dragged && resize) { b.dataset.user = '1'; delete b.dataset.limit; delete b.dataset.grown; delete b.dataset.grownK; } // the size is yours now
             dragged = true; b.classList.add('dragging');
             const dx = (ev.clientX - sx) / L.width * 100, dy = (ev.clientY - sy) / L.height * 100;
-            const box = resize ? [x0, y0, Math.max(2, w0 + dx), Math.max(1.5, h0 + dy)] : [x0 + dx, y0 + dy, w0, h0];
+            let box = [x0 + dx, y0 + dy, w0, h0];
+            if (resize) { // the edge you hold follows the pointer, the opposite one stays put
+              // never smaller than a readable box: a box dragged down to a sliver lost its text from sight (live report)
+              const w = Math.max(4, ed.l ? w0 - dx : ed.r ? w0 + dx : w0), h = Math.max(3, ed.t ? h0 - dy : ed.b ? h0 + dy : h0);
+              box = [ed.l ? x0 + w0 - w : x0, ed.t ? y0 + h0 - h : y0, w, h];
+            }
             Object.assign(b.style, { left: box[0] + '%', top: box[1] + '%', width: box[2] + '%', height: box[3] + '%' });
             b.dataset.box = JSON.stringify(box);
+            // the text follows the new size while you drag, once a frame
+            if (resize && !frame) frame = requestAnimationFrame(() => { frame = 0; b.dataset.ar = box[2] / box[3]; fit(b); });
           };
-          const end = () => { removeEventListener('pointermove', mv); removeEventListener('pointerup', up); removeEventListener('pointercancel', end); b.endDrag = null; b.classList.remove('dragging'); };
+          const end = () => { cancelAnimationFrame(frame); removeEventListener('pointermove', mv); removeEventListener('pointerup', up); removeEventListener('pointercancel', end); b.endDrag = null; b.classList.remove('dragging'); b.style.cursor = ''; };
           const up = () => {
             end();
             if (!dragged) return;
             b.dataset.user = '1'; b.style.transform = '';
             delete b.dataset.limit; delete b.dataset.grown; delete b.dataset.grownK;
-            if (!resize) snap(); // Shift+drag sets a size on purpose: that one is kept as drawn
-            const box = JSON.parse(b.dataset.box);
+            const fs0 = parseFloat(b.style.fontSize) || 0, dropped = b.dataset.box;
+            if (!resize) snap({ from: [x0, y0, w0, h0] }); // a size you set by hand is kept as drawn
+            let box = JSON.parse(b.dataset.box);
             b.dataset.ar = box[2] / box[3];
             fit(b);
+            // the snap found only a small piece of lettering there and the text shrank to a dot (live report: "I can't
+            // tell where it went"): the line stays where you dropped it, at its size
+            if (b.dataset.box !== dropped && parseFloat(b.style.fontSize) < Math.max(10, fs0 * 0.6)) {
+              box = JSON.parse(dropped);
+              Object.assign(b.style, { left: box[0] + '%', top: box[1] + '%', width: box[2] + '%', height: box[3] + '%' });
+              b.dataset.box = dropped; b.dataset.ar = box[2] / box[3];
+              fit(b);
+            }
             (o.moves ||= {})[lineKey(t.text)] = box;
             quiet({ type: 'move', key: o.key, text: t.text, box });
           };
@@ -848,7 +889,11 @@
       if (o.cancelled) return;
       if (res.error) throw new Error(res.error);
       o.key = res.key;
-      o.moves = res.moves || {};
+      // a line dragged while the draft was showing: the page had no cache entry yet, so the move wasn't saved - and
+      // replacing o.moves here put the line back where the model had it (live report). Keep it and save it now.
+      const draftMoves = o.moves || {};
+      o.moves = { ...(res.moves || {}), ...draftMoves };
+      for (const [k, box] of Object.entries(draftMoves)) { const ln = res.bubbles.find((x) => lineKey(x.text) === k); if (ln) quiet({ type: 'move', key: o.key, text: ln.text, box }); }
       if (res.glossary) window.__md.glossary = res.glossary; // pronoun pairs agreed so far, shared by later pages
       // the polish pass kept failing: the draft is shown and the AI learnt nothing from this page - say so,
       // once per kind of error (a reopen polishes it again without resending the image)

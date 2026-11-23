@@ -82,6 +82,10 @@ Các bản tạm "ver 0.6.0" … "ver 0.8.0" (19–20/11/2026) chưa được te
 **Kéo ô bản dịch**
 - Kéo một ô thả lên bong bóng thì ô tự khớp vào bong bóng đó như lúc dịch tự động: tìm chữ gốc dưới chỗ thả, xoá chữ gốc, đặt bản dịch trong viền. Trước đây ô giữ nguyên hình chữ nhật nền xám, đè lên chữ gốc. Thả lên tranh (không có chữ), lên bong bóng đã có bản dịch khác, hoặc Shift+kéo đổi cỡ thì giữ đúng như bạn đặt.
 - **Alt+bấm** vào ô đã kéo để trả về chỗ tự động (xoá vị trí đã lưu).
+- **Đổi cỡ bằng cách kéo mép hoặc góc ô** (con trỏ đổi thành mũi tên đổi cỡ), chữ căn lại ngay trong lúc kéo; ô không nhỏ hơn mức đọc được. Shift+kéo vẫn dùng được.
+- Ô bị kéo về chỗ cũ: nhích nhẹ trên chính chữ của nó bị tự khớp kéo lại; F5 làm mất vị trí đã chỉnh; kéo lúc trang còn hiện bản nháp thì mất khi bản cuối về. Giờ cả ba giữ đúng chỗ bạn đặt.
+- Kéo làm chữ teo lại: tự khớp vào một mẩu chữ nhỏ thì ô giữ nguyên chỗ và cỡ bạn thả.
+- Chữ gốc hiện lại sau khi nhích ô rồi F5; kéo ô không còn làm MangaDex tối màn hình / mở khung xem trước.
 - Chữ tự thu nhỏ khi kéo: ô kéo đi bắt đầu từ cỡ lưu ban đầu thay vì cỡ đang hiện (đã được nới cho vừa chữ Việt). Giờ giữ đúng cỡ đang thấy; ô bạn đã đặt cũng không bị tự nới hay tự chỉnh cỡ chữ theo trang nữa.
 
 **Trang tiêu đề (logo, phụ đề, credit)**
