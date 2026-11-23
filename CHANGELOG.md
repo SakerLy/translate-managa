@@ -89,6 +89,7 @@ Các bản tạm "ver 0.6.0" … "ver 0.8.0" (19–20/11/2026) chưa được te
 - Sau khi xoá, extension kiểm tra còn bao nhiêu nét chữ gốc lộ ra (đo trên trang thật: bong bóng còn 0-1%, logo xoá dở còn 15%, phụ đề 44%). Khung chữ trên nền sáng còn sót nhiều thì thay bằng một tấm nền phủ kín vùng chữ, như thợ dịch làm với logo không vẽ lại được; tấm nền không lấn sang bản dịch bên cạnh và không bao giờ dùng trên nền tối.
 
 **Xưng hô và trí nhớ**
+- Trí nhớ AI chỉ được lưu khi bật "Trau chuốt văn phong & xưng hô": bảng xưng hô, tên riêng và nhân vật chỉ do bước trau chuốt viết ra. Giờ khi tắt trau chuốt, mỗi trang có thêm một lượt gọi chỉ gửi chữ (không gửi ảnh, không sửa câu nào) để ghi sổ tay, chạy nền nên trang vẫn hiện ngay. Tốn thêm 1 lượt gọi mỗi trang, và lượt đọc ảnh trả thêm chữ gốc.
 - Hết lượt cả ngày ("retry in 17h…", Gemini miễn phí) bị hiểu thành chờ 17 giây: mỗi trang treo ~35 giây và gọi thêm 2 lần vô ích; giờ báo lỗi ngay.
 - Sửa trí nhớ trong trang cài đặt trong lúc đang dịch có thể xoá mất cặp xưng hô/nhân vật AI vừa học: giờ chỉ lưu đúng ô bạn sửa.
 - Trí nhớ không học được gì khi bước trau chuốt lỗi liên tục (hết lượt theo phút của Groq, gateway lỗi): trang giờ báo rõ "chưa trau chuốt được, AI chưa học từ trang này"; lỗi giới hạn theo phút được chờ hết phút thay vì thử lại ngay trong cùng phút.

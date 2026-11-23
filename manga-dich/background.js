@@ -176,7 +176,23 @@ const POLISH_JOB = {
 
 // Never loses a translation: any failure or a wrong line count keeps the draft (and the old glossary).
 // glossary: pronoun pairs agreed on earlier pages of this tab; returned updated for the next pages.
-async function polish(provider, key, model, bubbles, context, glossary = '') {
+// Polish off: the series memory still has to grow (user report: "Trí nhớ AI" only saved with polish on). A
+// text-only call that writes the notebook and leaves every line as it is. Kept out of the image prompt:
+// extra rules there cost box accuracy (see POLISH_SYSTEM note).
+const LEARN_JOB = {
+  system: `Bạn ghi sổ tay cho nhóm dịch truyện tranh sang tiếng Việt. Bạn nhận các câu của MỘT trang theo thứ tự đọc ("src" chữ gốc, "who" ai nói với ai, "draft" bản dịch đã dùng) và sổ tay hiện có. KHÔNG viết lại câu nào.
+Trả về DUY NHẤT một khối JSON: {"glossary": "...", "names": ["..."], "chars": "..."}
+"glossary": bảng xưng hô = bảng cũ + cặp mới thấy trong draft trang này, mỗi dòng một cặp, ghi CẢ HAI CHIỀU dạng "A ↔ B (quan hệ): A xưng X gọi B là Y; B xưng Y gọi A là X" (A, B là TÊN hoặc mô tả nhân vật, không phải đại từ; "xưng" = từ người nói tự chỉ mình, "gọi" = từ người nói chỉ người nghe; vd draft của Ken nói với Mio "Anh đi học. Em ở nhà nhé?" → Ken xưng anh gọi Mio là em). X, Y lấy ĐÚNG đại từ/cách gọi draft đang dùng ("tôi", "mình", "Reiss-sama", "cậu"…), không suy ra từ khác. Không có gì mới thì trả lại bảng cũ.
+"chars": danh sách nhân vật = danh sách cũ + người/thông tin mới; mỗi dòng "Tên: giới, tuổi ước lượng, vai trò, quan hệ". Giữ ngắn, không bịa.
+"names": CHỈ tên riêng thật trong src trang này, dạng "tên gốc → cách viết trong bản dịch". Không có thì [].`,
+  name: 'memory', maxTokens: 1500,
+  schema: {
+    type: 'object', additionalProperties: false, required: ['glossary', 'names', 'chars'],
+    properties: { glossary: { type: 'string' }, names: { type: 'array', items: { type: 'string' } }, chars: { type: 'string' } },
+  },
+};
+
+async function polish(provider, key, model, bubbles, context, glossary = '', job = POLISH_JOB) {
   if (!bubbles.length) return { bubbles, glossary };
   try {
     const P = typeof provider === 'string' ? PROVIDERS[provider] : provider; // id (default URL) or providerFor()
@@ -184,7 +200,7 @@ async function polish(provider, key, model, bubbles, context, glossary = '') {
     const head = !glossary ? '' : /^(BẢNG XƯNG HÔ|TÊN RIÊNG|GHI CHÚ|NHÂN VẬT|BẠN ĐỌC)/.test(glossary) ? glossary : `BẢNG XƯNG HÔ:\n${glossary}`;
     const prompt = (head ? head + '\n\n' : '') + (context ? `Lời thoại trang trước:\n${context}\n\n` : '')
       + 'Các bong bóng:\n' + JSON.stringify(bubbles.map((b) => ({ src: b.src || '', ...(b.who && { who: b.who }), draft: b.text })));
-    const raw = await P.translate(key, model, null, prompt, undefined, POLISH_JOB);
+    const raw = await P.translate(key, model, null, prompt, undefined, job);
     let out = JSON.parse(raw.replace(/^\s*```(?:json)?|```\s*$/g, ''));
     // some models answer with the bare lines array despite the schema (seen live: glm-4.6v returned
     // ["Cậu đi đâu đấy?", "Ừ!"] - polish then silently kept every draft). Take it: the glossary
@@ -908,7 +924,8 @@ async function translateJob(job, onDraft) {
   // numbered text blocks (content.js): the model names the frame, the pixels give the position
   const markNote = !part && marks.length ? `\n\nẢnh có ${marks.length} khung đỏ đánh số (1-${marks.length}) quanh những chỗ có thể là chữ. Khung và số đỏ KHÔNG phải chữ của truyện - không dịch chúng; có khung không chứa chữ (nét vẽ) - bỏ qua. Với mỗi mục: "marks" = số của (các) khung chứa chữ của mục đó (một bong bóng nằm trong 2 khung thì ghi cả 2); chữ không nằm trong khung nào thì "marks": [] và box_2d như thường. Vẫn ghi box_2d cho mọi mục.` : '';
   const prompt = (head ? head + '\n\n' : '') + where + markNote;
-  const call = () => P.translate(apiKey, model, { data, mime }, prompt, undefined, pageJob(doPolish, marks.length > 0));
+  const learn = !doPolish && !part && !!site; // polish off: a memory-only text call after the page (src/who needed)
+  const call = () => P.translate(apiKey, model, { data, mime }, prompt, undefined, pageJob(doPolish || learn, marks.length > 0));
   // Already read before (F5 / extension reload / a polish error mid-page): the image was paid for once,
   // reuse those lines and only redo the text-only polish - never send the image again.
   const saved = draftKey && !part && (await chrome.storage.local.get(draftKey))[draftKey];
@@ -932,7 +949,7 @@ async function translateJob(job, onDraft) {
   const untranslated = (b) => !b.sfx && b.text.split(/\s+/).length >= 3 && !VI.test(b.text);
   if (bubbles.some(untranslated)) {
     const warn = 'LƯU Ý: lần trước trường "text" bị trả NGUYÊN VĂN ngôn ngữ gốc. "text" PHẢI là bản dịch TIẾNG VIỆT.\n\n';
-    const again = await P.translate(apiKey, model, { data, mime }, warn + prompt, undefined, pageJob(doPolish, marks.length > 0)).then((t) => notEcho(parseBubbles(t, size, marks)), () => []);
+    const again = await P.translate(apiKey, model, { data, mime }, warn + prompt, undefined, pageJob(doPolish || learn, marks.length > 0)).then((t) => notEcho(parseBubbles(t, size, marks)), () => []);
     if (again.length && !again.some(untranslated)) bubbles = again;
     else bubbles = bubbles.filter((b) => !untranslated(b));
   }
@@ -971,6 +988,12 @@ async function translateJob(job, onDraft) {
   });
   await cachePut(key, bubbles);
   if (draftKey && doPolish) await chrome.storage.local.remove(draftKey).catch(() => {});
+  // not awaited: the page shows now; the notebook is written in series order behind it
+  if (learn && bubbles.length) seriesTurn(site, async () => {
+    const mem = await loadMem(site).catch(() => ({ glossary: '', names: [], notes: [] }));
+    const r = await polish(P, apiKey, model, bubbles, context, memBlock(mem), LEARN_JOB);
+    if (!r.failed) await learnFromPage(site, { ...mem, label: seriesLabel || mem.label }, r.glossary || mem.glossary, r.names, r.chars);
+  }).catch(() => {});
   return { bubbles, glossary: g };
 }
 
