@@ -689,7 +689,9 @@ function textBlocksIn(px, invert) {
     lum[y * gw + x] = invert ? 255 - v : v;
   }
   const DARK = 110, LIGHT = 200, FADED = 70;
-  const CH = Math.max(6, 0.045 * Math.min(gw, gh)); // tallest letter, in cells
+  // tallest letter, in cells - from the LONG side: on a 768x1087 page the short side gave 35 cells and the
+  // 36-cell letters of a "MA·KA·NYA..." bubble were thrown away as art (tests/live/detect-recall.js)
+  const CH = Math.max(6, 0.045 * Math.max(gw, gh));
   const label = new Int32Array(gw * gh), stack = [];
   const letters = [];
   for (let sy = 0; sy < gh; sy++) for (let sx = 0; sx < gw; sx++) {
@@ -714,15 +716,20 @@ function textBlocksIn(px, invert) {
     const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
     // a letter is roughly as wide as tall (I and 1 aside, which sit among wider ones); a strand of hair or a
     // fold line is a long thin stroke (live benchmark: blocks found on hair, wasting recovery crops)
-    const thin = (bh > 4 * bw && bh > 12) || (bw > 5 * bh && bw > 12);
-    letters.push(big || thin || bh < 3 || n < 4 || n / (bw * bh) > 0.9 ? null : { x0, y0, x1, y1, id, min });
+    // Both rules only for blobs bigger than a stroke: a kanji is made of solid bars (一, 丨) that are thin AND fully
+    // filled, and dropping them left its other strokes too far apart to cluster (tests/unit/detect.test.js)
+    const thin = ((bh > 4 * bw && bh > 12) || (bw > 5 * bh && bw > 12)) && Math.max(bw, bh) > 0.8 * CH;
+    const solid = n / (bw * bh) > 0.9 && Math.min(bw, bh) > 0.4 * CH;
+    letters.push(big || thin || bh < 3 || n < 4 || solid ? null : { x0, y0, x1, y1, id, min });
   }
-  // a letter sits on paper: most cells around it (not part of it) are light
+  // a letter sits on paper: most NON-INK cells around it are light. Ink cells (this letter or the next one) are
+  // not judged - small lettering set tight had its neighbours fill the ring and failed the test ("BIAR
+  // KUBAWAKAN.", "YAH..." never detected, 7 of 12 letters rejected - tests/live/detect-recall.js)
   const lit = letters.filter(Boolean).filter((l) => {
     let a = 0, b = 0;
     for (let y = Math.max(0, l.y0 - 2); y <= Math.min(gh - 1, l.y1 + 2); y++) for (let x = Math.max(0, l.x0 - 2); x <= Math.min(gw - 1, l.x1 + 2); x++) {
       const q = y * gw + x;
-      if (label[q] === l.id) continue;
+      if (label[q] === l.id || lum[q] < DARK) continue;
       a++; if (lum[q] > LIGHT) b++;
     }
     return a && b / a >= 0.6;
@@ -743,21 +750,50 @@ function textBlocksIn(px, invert) {
   const groups = new Map();
   lit.forEach((l, i) => { const r = find(i); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(l); });
   const out = [];
+  // Heights are judged per GLYPH, not per blob: a kanji is several separate strokes (本 当 split into pieces
+  // 26, 8, 7, 23, 14, 3 cells tall), so blob heights looked "mixed" and blob medians "small" and whole
+  // Japanese lines were dropped (7 of 14 on the synthetic page - tests/live/detect-recall.js). Blobs closer
+  // than GAP merge into one glyph; Latin letters just merge into words, whose height is the letters'. GAP
+  // scales with the lettering (20% of the tall blobs): う's top stroke and ！'s dot sit 3 cells from a 22-cell
+  // body, a fixed 2 left "うん！" as fragments.
+  const glyphHeights = (g) => {
+    const hb = g.map((l) => l.y1 - l.y0 + 1).sort((a, z) => a - z);
+    const tall = hb[(hb.length * 0.8) | 0], GAP = Math.max(2, Math.round(0.2 * tall));
+    const c = g.map((l) => ({ x0: l.x0, y0: l.y0, x1: l.x1, y1: l.y1 }));
+    for (let merged = true; merged;) {
+      merged = false;
+      for (let i = 0; i < c.length; i++) for (let j = c.length - 1; j > i; j--) {
+        const a = c[i], b = c[j];
+        if (b.x0 > a.x1 + GAP || a.x0 > b.x1 + GAP || b.y0 > a.y1 + GAP || a.y0 > b.y1 + GAP) continue;
+        // a glyph is about as big as its largest stroke: never grow past 1.3x it (that would be two lines
+        // or a word merged - a thought bubble's lines came out 66 cells tall and read as "mixed")
+        if (Math.max(a.y1, b.y1) - Math.min(a.y0, b.y0) + 1 > 1.3 * tall || Math.max(a.x1, b.x1) - Math.min(a.x0, b.x0) + 1 > 1.3 * tall) continue;
+        a.x0 = Math.min(a.x0, b.x0); a.y0 = Math.min(a.y0, b.y0); a.x1 = Math.max(a.x1, b.x1); a.y1 = Math.max(a.y1, b.y1);
+        c.splice(j, 1); merged = true;
+      }
+    }
+    return c.map((q) => q.y1 - q.y0 + 1).sort((a, z) => a - z);
+  };
   for (const g of groups.values()) {
     // short exclamations ("...NO.", "EH!?", "HẢ?") have 3-5 letters: accept them when the letters are big,
     // which tone dots and grass never are (live run: "...NO." was never detected)
-    const med = g.map((l) => l.y1 - l.y0 + 1).sort((a, z) => a - z)[g.length >> 1];
+    const gh_ = glyphHeights(g);
+    const med = gh_[gh_.length >> 1];
     if (g.length < 3 || (g.length < 6 && med < 0.012 * Math.max(gw, gh))) continue;
     const x0 = Math.min(...g.map((l) => l.x0)), y0 = Math.min(...g.map((l) => l.y0));
     const x1 = Math.max(...g.map((l) => l.x1)) + 1, y1 = Math.max(...g.map((l) => l.y1)) + 1;
     const bw = x1 - x0, bh = y1 - y0;
     if (bw > 0.5 * gw || bh > 0.5 * gh || bw * bh > 0.08 * gw * gh) continue; // a whole panel of hatching, not text
-    // real lettering is a few similar heights; scattered grass/hatching is not
-    const hs = g.map((l) => l.y1 - l.y0 + 1).sort((a, b) => a - b);
-    if (hs[(hs.length * 0.8) | 0] > 2.5 * hs[(hs.length * 0.2) | 0] + 2) continue;
+    // real lettering is a few similar heights; scattered grass/hatching is not. Punctuation (".", ",", the dots
+    // of "?!") is far shorter than the letters and made "MASA SIH?!" and "AH, BEGITU YA." look mixed: only
+    // marks at least 40% of the median letter height take part.
+    const hs = gh_.filter((h) => h >= 0.4 * med);
+    if (hs.length && hs[(hs.length * 0.8) | 0] > 2.5 * hs[(hs.length * 0.2) | 0] + 2) continue;
     // printed lettering has a near-black core; a flashback echo / faded background voice is grey all through
-    // (live report: those must not be translated - recovery used to send them to the AI)
-    const ink = g.map((l) => l.min).sort((a, z) => a - z)[g.length >> 1];
+    // (live report: those must not be translated - recovery used to send them to the AI). Judged on the darkest
+    // quarter of the letters: thin small lettering through JPEG has grey letters too ("MAKASIH." median 75,
+    // marked faded and never recovered), an echo has no dark one at all.
+    const ink = g.map((l) => l.min).sort((a, z) => a - z)[(g.length * 0.25) | 0];
     out.push({ x: x0 / gw * 100, y: y0 / gh * 100, w: bw / gw * 100, h: bh / gh * 100, n: g.length, ...(ink > FADED && { faded: true }) });
   }
   return out;

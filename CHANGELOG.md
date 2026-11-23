@@ -40,6 +40,14 @@ Các bản tạm "ver 0.6.0" … "ver 0.8.0" (19–20/11/2026) chưa được te
 - Chữ gốc dọc không còn dựng chữ Việt theo chiều dọc; cỡ chữ dịch không dưới ~13px; khung dẫn truyện không in nghiêng.
 
 **Bỏ sót chữ**
+- Dịch bù của trang đang đọc phải chờ các trang sau dịch xong mới chạy: lượt dịch bù không được ưu tiên nên xếp cuối hàng, sau các trang đọc trước. Giờ dịch bù của trang đang hiện trên màn hình và mọi lần bấm "+" đều được ưu tiên, có một chỗ chạy dự phòng riêng (việc thường vẫn tối đa 2 lượt gọi cùng lúc).
+- Bộ dò chữ bằng điểm ảnh bỏ sót bong bóng nên dịch bù không biết mà dịch (đo trên trang thật có đáp án: 20/28 → 23/28 bong bóng, chữ Nhật 7 → 1 trên 14 khối bị sót, không thêm khối giả nào trên trang không chữ):
+  - dấu chấm/phẩy làm dòng chữ ("MASA SIH?!") bị coi là "chiều cao lẫn lộn";
+  - chữ nhỏ viết sát nhau bị loại vì chữ bên cạnh làm hỏng phép thử "chữ nằm trên giấy";
+  - chữ to ("MA·KA·NYA...") bị coi là nét vẽ vì ngưỡng tính theo cạnh ngắn của trang;
+  - chữ đen nhỏ qua nén JPEG bị gắn nhầm "chữ mờ hồi tưởng" và không bao giờ được dịch bù;
+  - chữ Hán/kana bị tách thành từng nét rời (và nét đặc như 一, 丨 bị loại), nên cả dòng chữ Nhật bị bỏ.
+- Chữ dịch bị cắt mất dòng đầu và dòng cuối khi dài hơn ô: cỡ chữ giờ được kiểm tra trên trang thật (không chỉ trên canvas), và khi nhỏ nhất vẫn không vừa thì ô tự nới ra theo chữ thay vì cắt.
 - GPT trả toạ độ hỏng (lặp cạnh phải, chỉ 3 số, sai thứ tự) làm mất câu: được sửa lại rồi khớp vào bong bóng.
 - Nét tranh dưới câu ngắn bị tính là chữ làm mất câu ("...AH...").
 - Dịch bù đọc lại một phần khung chữ đã dịch nên hiện hai bản dịch.

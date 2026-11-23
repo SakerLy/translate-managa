@@ -793,8 +793,13 @@ function cancel(tag) {
 
 function pump() {
   clearTimeout(wakeTimer);
-  while (running.size < QMAX) {
-    const i = pending.findIndex((p) => p.urgent || !(p.notBefore > Date.now())); // backoff only defers non-urgent retries
+  // One spare slot for urgent work (the page on screen, a "+" press): with both slots busy on the visible page's
+  // polish and a later page, its missed-text call used to wait for them (user report). Normal work stays at
+  // QMAX so a gateway is never hit harder than before.
+  while (running.size < QMAX || (running.size < QMAX + 1 && pending.some((p) => p.urgent))) {
+    const i = running.size < QMAX
+      ? pending.findIndex((p) => p.urgent || !(p.notBefore > Date.now())) // backoff only defers non-urgent retries
+      : pending.findIndex((p) => p.urgent);
     if (i < 0) { // everything left is in backoff: wake up when the first one is due
       if (pending.length) wakeTimer = setTimeout(pump, Math.min(...pending.map((p) => p.notBefore)) - Date.now());
       return;

@@ -165,7 +165,30 @@
       if (lines) { b.classList.add('shaped'); b.textContent = lines.join('\n'); }
       else { b.classList.remove('shaped'); b.textContent = b.dataset.raw; } // not even the floor fits: let CSS wrap
     }
+    // The shaped path above trusts a canvas measurement; the page may draw wider/taller (the comic font not
+    // loaded yet, synthetic bold/italic). Check the real box and step down until it really fits - text past
+    // the box is cut by overflow:hidden on BOTH ends (user report: first and last lines half gone).
+    for (let s = best - 1; s >= 6 && !fits(b); s--) {
+      b.style.fontSize = s + 'px'; best = s;
+      if (b.classList.contains('shaped')) {
+        const lines = shapeAt(b, s);
+        if (lines) b.textContent = lines.join('\n'); else { b.classList.remove('shaped'); b.textContent = b.dataset.raw; }
+      }
+    }
     return best;
+  };
+  // Last resort, never lose words: still overflowing at the smallest size, the box grows to its text (kept
+  // centred, past the bubble's outline if it must) and stops clipping. A few letters over the art beat a
+  // translation with its first and last lines cut off.
+  const unclip = (b) => {
+    if (fits(b) || !b.parentElement) return;
+    const P = b.parentElement, pw = P.clientWidth, ph = P.clientHeight;
+    if (!pw || !ph) return;
+    const needW = Math.max(b.clientWidth, b.scrollWidth + 2), needH = Math.max(b.clientHeight, b.scrollHeight + 2);
+    const w = Math.min(100, needW / pw * 100), h = Math.min(100, needH / ph * 100);
+    const x = parseFloat(b.style.left) || 0, y = parseFloat(b.style.top) || 0, w0 = parseFloat(b.style.width) || w, h0 = parseFloat(b.style.height) || h;
+    const nx = Math.max(0, Math.min(100 - w, x - (w - w0) / 2)), ny = Math.max(0, Math.min(100 - h, y - (h - h0) / 2));
+    Object.assign(b.style, { left: nx + '%', top: ny + '%', width: w + '%', height: h + '%', overflow: 'visible' });
   };
   // place a box at (x, y, w, h) %, never past the bubble's own outline when it is known (cleanPatch inner)
   const setBox = (b, x, y, w, h) => {
@@ -198,6 +221,7 @@
       const others = [...(b.parentElement?.querySelectorAll('.md-b') || [])].filter((o) => o !== b && o.dataset.box).map((o) => JSON.parse(o.dataset.box));
       if (!others.some(hits)) { setBox(b, nx, ny, w2, h2); search(b, lo, hi); }
     }
+    unclip(b);
   };
 
   const grab = (src, w, h) => {
@@ -256,6 +280,7 @@
       const f = parseFloat(b.style.fontSize);
       if (f > med * 1.15) { b.style.fontSize = Math.round(med * 1.15) + 'px'; continue; }
       for (let i = 0; i < 2 && parseFloat(b.style.fontSize) < med * 0.85; i++) { grow(b, 1.2); search(b, 7, Math.round(med)); }
+      unclip(b);
     }
   };
 
@@ -316,8 +341,12 @@
     for (const c of crops) { c.top = top; sg.drawImage(src, c.sx, c.sy, c.sw, c.sh, 0, top, c.cw, c.ch); top += c.ch + GAP; }
     let found = [];
     try {
+      // The page you are reading jumps the queue: without `urgent` its crop call went behind the pages queued
+      // ahead of it and its missing bubbles appeared only after the next pages were done (user report). A "+"
+      // press is always urgent. Judged now, not when the page started: you may have turned the page since.
+      const r0 = img.getBoundingClientRect(), urgent = !!only || (r0.width > 0 && r0.bottom > 0 && r0.top < innerHeight);
       const r = await chrome.runtime.sendMessage({ type: 'translate', data: sheet.toDataURL('image/jpeg', 0.9).split(',')[1], mime: 'image/jpeg', w: sheet.width, h: sheet.height,
-        context: have.map((b) => b.text).join('\n'), glossary: window.__md.glossary, site: (o.series || series()).key, seriesLabel: (o.series || series()).label, part: true, tag: o.tag });
+        context: have.map((b) => b.text).join('\n'), glossary: window.__md.glossary, site: (o.series || series()).key, seriesLabel: (o.series || series()).label, part: true, tag: o.tag, urgent });
       o.recoverError = r.error || ''; // the reader's "+" says why nothing came back
       if (!r.error && r.bubbles?.length) {
         // Each crop was cut around ONE detected block, so the block's own rectangle is where its translation
