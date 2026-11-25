@@ -34,6 +34,12 @@ Các bản tạm "ver 0.6.0" … "ver 0.8.0" (19–20/11/2026) chưa được te
 
 ### Sửa lỗi
 **Đặt chữ và xoá chữ**
+- Đặt chữ có hệ thống hơn: mọi quyết định xoá chữ gốc / phủ khối / đặt ô / cỡ ô nằm trong một hàm (fit.js `planLine`), dùng chung cho dịch tự động, kéo thả và tải lại; đo được ngoại tuyến bằng `tests/live/placement.js` (page 4, 17 câu trả lời model đã lưu). Trước → sau: chữ gốc còn lộ 4,2% → 3,9%, câu chữ quá nhỏ 16 → 13.
+  - Chữ dịch nhỏ vì bị nhét vào đúng khung chữ gốc (lòng bong bóng chỉ tìm được ở 24/188 câu): giờ ô mở ra khoảng giấy trắng quanh chữ gốc tới viền bong bóng, hoặc cả lòng bong bóng khi tìm được và không có câu nào khác trong đó.
+  - Câu model không ghi loại (GPT hay bỏ trống) bị bỏ qua bước kiểm tra "xoá còn sót" nên chữ gốc lộ dưới chữ dịch: giờ được kiểm tra như bong bóng.
+  - Bong bóng có hai cột chữ: tô trắng cả bong bóng xoá luôn cột của câu khác (Gokuaku 4e141a79/21, "YOU EVEN HAVE EXPERTISE…" mất): giờ chỉ xoá chữ của câu này, cột kia giữ lại cho câu của nó, dịch bù hoặc nút "+".
+  - Ô đã xoá chữ (trong suốt) bị kéo sang chỗ chưa xoá thì chữ dịch đè lên chữ gốc: giờ ô lấy lại nền đặc khi không còn nằm trên vùng đã xoá.
+  - Kéo thả tự khớp lúc được lúc không: giờ thả che một phần chữ (30%) là khớp, khớp cả khi không xác nhận được bằng nét chữ, và cho kết quả y như lúc dịch tự động.
 - Lớp phủ trắng tràn ra ngoài bong bóng: ô lớn hơn bong bóng được xoá theo hình bong bóng; khi không xoá được thì khối phủ chỉ che phần có chữ; ô bị nới sang hoạ tiết bên cạnh (tim, tóc) được cắt về đúng phần chữ.
 - Chữ gốc dính viền bong bóng còn sót; "bóng ma" xám của chữ đã xoá; ô chồng nhau vẽ lại chữ gốc đã xoá.
 - Chữ dịch đè lên nhau khi một ô phình qua dòng chữ bên cạnh.

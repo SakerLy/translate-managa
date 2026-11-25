@@ -884,11 +884,12 @@ function trimOverlaps(list) {
 // Only the pixels it changed are opaque: two overlapping boxes each copied the ORIGINAL page into their
 // patch, so the one drawn second painted the first one's erased letters back (benchmark: "ADO ELLA…" left).
 // eslint-disable-next-line no-unused-vars
-function cleanPatch(px, b) {
+function cleanPatch(px, b, narrow = false) {
   // Speech bubbles first by their own shape, in a window wide enough to hold the whole bubble: letters
   // touching the outline survived the per-letter erase (live report: "WHAT'RE YOU DOING…" half left), and a
   // box smaller than its bubble never saw the outline at all
-  const c = (b.kind !== 'art' && b.kind !== 'sfx' && cleanPatchRaw(px, { ...b, wide: true })) || cleanPatchRaw(px, b);
+  // narrow: letters only - the bubble also holds someone else's lettering (planLine)
+  const c = (!narrow && b.kind !== 'art' && b.kind !== 'sfx' && cleanPatchRaw(px, { ...b, wide: true })) || cleanPatchRaw(px, b);
   if (!c) return c;
   const { width: W, data } = px, x0 = Math.round(c.x / 100 * W), y0 = Math.round(c.y / 100 * px.height);
   for (let y = 0; y < c.ph; y++) for (let x = 0; x < c.pw; x++) {
@@ -1249,4 +1250,217 @@ function ellipseLines(text, measure, boxW, boxH, lineH) {
     }
   }
   return null;
+}
+
+// How one translated line sits on the page, decided from the pixels alone (no DOM): is its source lettering erased
+// (patch) or covered by an opaque panel (solid), and in which box is the text laid out. content.js applies the plan;
+// tests/live/placement.js measures it on real pages with real model answers.
+//   t: the fitted line (fitBubbles), separated: every line drawn on the page, blocks: textBlocks(px),
+//   box: the box the line has now [x,y,w,h], user: the reader placed it by hand (its box is never moved)
+// returns { patch, solid, box, limit, plain, deg } - box/limit null = unchanged, limit false = clear it
+// A rect pulled back from every other line it overlaps, on the side facing that line (the title's panel covered
+// half the subtitle beside it, live aa77c143/4).
+function clearOf([rx, ry, rw, rh], t, separated) {
+  let x0 = rx, y0 = ry, x1 = rx + rw, y1 = ry + rh;
+  for (const u of separated) {
+    if (u === t || u.x >= x1 || u.x + u.w <= x0 || u.y >= y1 || u.y + u.h <= y0) continue;
+    const ucx = u.x + u.w / 2, ucy = u.y + u.h / 2, scx = (x0 + x1) / 2, scy = (y0 + y1) / 2;
+    if (Math.abs(ucx - scx) / (x1 - x0) >= Math.abs(ucy - scy) / (y1 - y0)) { if (ucx > scx) x1 = Math.min(x1, u.x); else x0 = Math.max(x0, u.x + u.w); }
+    else if (ucy > scy) y1 = Math.min(y1, u.y); else y0 = Math.max(y0, u.y + u.h);
+  }
+  return [x0, y0, Math.max(1, x1 - x0), Math.max(1, y1 - y0)];
+}
+// eslint-disable-next-line no-unused-vars
+function planLine(px, t, separated, blocks, box, user) {
+  const out = { patch: null, solid: null, box: null, limit: null, plain: false, deg: 0 };
+  const lum = /(\d+),\s*(\d+),\s*(\d+)/.exec(t.bg || '');
+  const toned = lum && (() => { const v = 0.299 * lum[1] + 0.587 * lum[2] + 0.114 * lum[3]; return v > 70 && v < 190; })();
+  let solid = null;
+  if (px && t.fit && t.fit !== 'kept' && !toned) {
+    try {
+      // erase the whole lettering: the box (all of it, even if its text got half after a split) grown to
+      // every detected text block it sits on - a box covering only the top of a bubble's text left the
+      // last lines ("BERNIAT…", "SEMPAT MIKIR") standing
+      // full = letters this line answers for; once it spans another line still drawn, erasing it hit that
+      // neighbour's bubble and left this caption untouched (live 66dcdbac/9: "BECAUSE SHE WAS—")
+      const f = t.full, holds = (u) => u !== t && u.x + u.w / 2 > f.x && u.x + u.w / 2 < f.x + f.w && u.y + u.h / 2 > f.y && u.y + u.h / 2 < f.y + f.h;
+      const r0 = { ...(f && !separated.some(holds) ? f : t), kind: t.kind, bg: t.bg };
+      let er = { ...r0 };
+      for (const k of blocks) {
+        const ix = Math.max(0, Math.min(k.x + k.w, r0.x + r0.w) - Math.max(k.x, r0.x)), iy = Math.max(0, Math.min(k.y + k.h, r0.y + r0.h) - Math.max(k.y, r0.y));
+        if (ix * iy < 0.3 * k.w * k.h) continue;
+        const x0 = Math.min(er.x, k.x), y0 = Math.min(er.y, k.y);
+        er = { ...er, x: x0, y: y0, w: Math.max(er.x + er.w, k.x + k.w) - x0, h: Math.max(er.y + er.h, k.y + k.h) - y0 };
+      }
+      let c = cleanPatch(px, er), seeThrough = null;
+      // A bubble holding a second block of lettering that isn't this line's (two columns, the other line's box
+      // misplaced by the model): repainting the whole bubble wiped that text too, and this line then took the whole
+      // bubble (live Gokuaku 4e141a79/21: "YOU EVEN HAVE EXPERTISE…" gone, its translation stranded on the art).
+      // Only this line's letters go; the other text stays for its own line, the missed-text pass or a "+".
+      const mine = (k) => Math.max(0, Math.min(k.x + k.w, er.x + er.w) - Math.max(k.x, er.x)) * Math.max(0, Math.min(k.y + k.h, er.y + er.h) - Math.max(k.y, er.y)) >= 0.3 * k.w * k.h;
+      const n0 = c?.inner;
+      if (n0 && blocks.some((k) => !k.faded && k.n >= 6 && !mine(k) && k.x + k.w / 2 > n0.x && k.x + k.w / 2 < n0.x + n0.w && k.y + k.h / 2 > n0.y && k.y + k.h / 2 < n0.y + n0.h)) c = cleanPatch(px, er, true);
+      // Erase check, as an editor would look at it: if much of the original lettering under this line is
+      // still showing (a decorated title logo only half lifted, live aa77c143/4 - the translation sat on
+      // top of the leftover kanji), drop the patch and set the line on a solid panel over the whole
+      // lettering. Boxes and bubbles only: on the art a solid panel would hide the drawing.
+      // (no kind from the model = a bubble: GPT often leaves it out, and those lines skipped this check entirely)
+      if (c && (t.kind === 'box' || t.kind === 'bubble' || !t.kind) && t.core) {
+        const W = px.width, H = px.height, d = px.data, m = /(\d+),\s*(\d+),\s*(\d+)/.exec(t.bg || '');
+        const bg = m ? [+m[1], +m[2], +m[3]] : [255, 255, 255];
+        // a caption/logo box is judged over its whole erase area (the fit's letters were only part of a
+        // decorated logo, the kanji above them stayed); a bubble over its letters (its outline is in the area)
+        // ...and a bubble only where the detector saw lettering inside its letters' box: a see-through bubble
+        // shows the drawing behind its text, and those hair strokes and tone lines counted as letters left
+        // standing (46%) - the clean erase was thrown away for a grey slab wider than the bubble (live
+        // Gokuaku 623565ad/10: 11% once counted on the lettering alone)
+        const lettering = t.kind === 'box' ? [] : blocks.filter((k) => !k.faded && k.x < t.core[0] + t.core[2] && k.x + k.w > t.core[0] && k.y < t.core[1] + t.core[3] && k.y + k.h > t.core[1]);
+        const lx0 = Math.max(t.core[0], Math.min(...lettering.map((k) => k.x))), ly0 = Math.max(t.core[1], Math.min(...lettering.map((k) => k.y)));
+        // (5% in from its edges: a caption's own frame line runs along them and is never erased - it alone
+        // read 10.5% "left" on a cleanly erased caption, which became a white slab, live Gokuaku 4e141a79/20)
+        const [cx, cy, cw, ch] = t.kind === 'box' ? [er.x + er.w * 0.05, er.y + er.h * 0.05, er.w * 0.9, er.h * 0.9] : !lettering.length ? t.core
+          : [lx0, ly0, Math.min(t.core[0] + t.core[2], Math.max(...lettering.map((k) => k.x + k.w))) - lx0, Math.min(t.core[1] + t.core[3], Math.max(...lettering.map((k) => k.y + k.h))) - ly0];
+        const px0 = c.x / 100 * W, py0 = c.y / 100 * H;
+        const count = ([qx0, qy0, qw, qh]) => {
+          let ink = 0, left = 0;
+          for (let y = Math.floor(qy0 / 100 * H); y < (qy0 + qh) / 100 * H; y += 2) for (let x = Math.floor(qx0 / 100 * W); x < (qx0 + qw) / 100 * W; x += 2) {
+            const i = (y * W + x) * 4;
+            if (Math.abs(d[i] - bg[0]) + Math.abs(d[i + 1] - bg[1]) + Math.abs(d[i + 2] - bg[2]) < 150) continue;
+            // ink inside another line's box is that line's to erase (a bubble split in two lobes: the second
+            // lobe's letters counted as this one's leftover, live 66dcdbac/8)
+            const X = x / W * 100, Y = y / H * 100;
+            if (separated.some((u) => u !== t && X >= u.x && X <= u.x + u.w && Y >= u.y && Y <= u.y + u.h)) continue;
+            ink++;
+            const qx = Math.floor((x - px0) * c.pw / (c.w / 100 * W)), qy = Math.floor((y - py0) * c.ph / (c.h / 100 * H));
+            if (qx < 0 || qy < 0 || qx >= c.pw || qy >= c.ph || !c.data[(qy * c.pw + qx) * 4 + 3]) left++;
+          }
+          return [ink, left];
+        };
+        const [ink, left] = count([cx, cy, cw, ch]);
+        // see-through bubble (the drawing stays around the erased letters): the translation must stay on the
+        // erased lettering, not spread over the art inside a box wider than the bubble (live Gokuaku 623565ad/10)
+        if (lettering.length && ink > 40 && left <= 0.2 * ink) { const [i2, l2] = count(t.core); if (l2 > 0.2 * i2) seeThrough = [cx, cy, cw, ch]; }
+        // light panels only: a box GPT misplaced onto a black suit became a black slab over the character
+        const light = 0.299 * bg[0] + 0.587 * bg[1] + 0.114 * bg[2] > 200;
+        // measured live: well-erased bubbles leave 0-1% of their lettering; a half-lifted logo 15%, a subtitle
+        // 44%, a bubble whose first line "HOW" stayed 23% (6b101d55/7)
+        // bubbles erased stroke by stroke normally leave up to ~12% (66dcdbac/8, looks clean): 20% for them
+        if (light && ink > 40 && left > (t.kind === 'box' ? 0.1 : 0.2) * ink) { c = null; solid = er; }
+      }
+      if (c) {
+        out.patch = c;
+        // the bubble's own shape is known: a box that spilled past its outline is pulled back inside it,
+        // so the translation is laid out in the bubble, not across its edge
+        const n = c.inner;
+        if (n && !user) out.limit = [n.x, n.y, n.w, n.h];
+        if (!n && seeThrough && !user) {
+          const [sx, sy, sw, sh] = seeThrough, mx = sw * 0.04, my = sh * 0.04;
+          box = [sx - mx, sy - my, sw + 2 * mx, sh + 2 * my];
+          out.box = box; out.limit = box; // harmonize may not widen it back over the art
+          out.plain = true; // a rectangle of lettering, not an ellipse: oval lines left it at 11px
+        }
+        // ...and when the box is only the lettering's size, the text gets the whole bubble too: Vietnamese runs
+        // longer than the source and squeezed into the old letters' box came out tiny (live report: "size quá nhỏ").
+        // Not when another line sits in that space: two bubbles touching read as one interior.
+        const alone = n && !separated.some((u) => u !== t && u.x + u.w / 2 > n.x && u.x + u.w / 2 < n.x + n.w && u.y + u.h / 2 > n.y && u.y + u.h / 2 < n.y + n.h);
+        if (n && !user && (alone || n.w * n.h < 0.9 * t.w * t.h)) {
+          const pad = 0.08;
+          box = [n.x + n.w * pad, n.y + n.h * pad, n.w * (1 - 2 * pad), n.h * (1 - 2 * pad)];
+          out.box = box;
+        }
+        // no bubble shape found (most bubbles: open to the gutter, touching a neighbour, or failing the repaint
+        // checks): the text still gets the paper around its letters instead of only the letters' own box
+        if (!n && !seeThrough && !user && t.kind !== 'art' && t.kind !== 'sfx') {
+          const room = roomAround(px, t.core || [t.x, t.y, t.w, t.h]);
+          if (room) {
+            const r = clearOf(room, t, separated);
+            if (r[2] * r[3] > box[2] * box[3]) { box = r; out.box = box; out.limit = r; }
+          }
+        }
+      }
+    } catch { /* keep the coloured block */ }
+  }
+  // Not erased: an opaque block. Over the whole box it spilled past the bubble's outline onto the art
+  // (live reports), because the box was widened into the bubble or came bigger from the model. The
+  // lettering's own extent is inside the bubble: the block covers that, a little margin around it.
+  if (solid && !user) {
+    const mx = Math.min(1, solid.w * 0.03), my = Math.min(0.8, solid.h * 0.05);
+    let x0 = Math.max(0, solid.x - mx), y0 = Math.max(0, solid.y - my), x1 = Math.min(100, solid.x + solid.w + mx), y1 = Math.min(100, solid.y + solid.h + my);
+    // the panel stops where a neighbouring translation starts (the title's panel covered half the subtitle
+    // beside it, live aa77c143/4): trim the side facing it
+    for (const u of separated) {
+      if (u === t || u.x >= x1 || u.x + u.w <= x0 || u.y >= y1 || u.y + u.h <= y0) continue;
+      const ucx = u.x + u.w / 2, ucy = u.y + u.h / 2, scx = (x0 + x1) / 2, scy = (y0 + y1) / 2;
+      if (Math.abs(ucx - scx) / (x1 - x0) >= Math.abs(ucy - scy) / (y1 - y0)) { if (ucx > scx) x1 = Math.min(x1, u.x); else x0 = Math.max(x0, u.x + u.w); }
+      else if (ucy > scy) y1 = Math.min(y1, u.y); else y0 = Math.max(y0, u.y + u.h);
+    }
+    box = [x0, y0, Math.max(1, x1 - x0), Math.max(1, y1 - y0)];
+    out.solid = box; out.box = box; out.limit = false;
+  }
+  if (!out.patch && !solid && t.core && t.fit !== 'kept' && !user) {
+    const [cx, cy, cw, ch] = t.core, px2 = Math.min(1.2, cw * 0.06), py2 = Math.min(1, ch * 0.08);
+    const nb = [cx - px2, cy - py2, cw + 2 * px2, ch + 2 * py2];
+    if (nb[2] * nb[3] < 0.85 * t.w * t.h) {
+      box = nb; out.box = box;
+      out.limit = [nb[0] - nb[2] * 0.1, nb[1] - nb[3] * 0.1, nb[2] * 1.2, nb[3] * 1.2]; // growing for a readable size stays near
+    }
+  }
+  // A shout drawn on the art that can't be erased (its letters touch the drawing - live 66dcdbac/9: a
+  // vertical "AARGHHH!!" fused with a white face) became a black block over the face. A band across its
+  // middle carries the translation; the source shout stays visible above and below, like an SFX note.
+  if (!out.patch && t.kind === 'art' && (t.style === 'shout' || t.style === 'big' || t.sfx) && !user && t.h > 8) { // GPT tags it "big"
+    const [bx, by, bw, bh] = box, nh = Math.max(6, bh * 0.28);
+    box = [bx, by + (bh - nh) / 2, bw, nh]; out.box = box; out.limit = false;
+  }
+  // Slanted lettering (a hand-written note, a tilted sign): the translation follows its angle (live report:
+  // a letter written in slanted lines came out in level lines). The box shrinks to the rotated rectangle
+  // whose bounding box is the source's, so the turned text stays on it.
+  const deg = !user && px && t.fit && t.fit !== 'kept' && t.kind !== 'sfx' && t.style !== 'vertical' ? textAngle(px, t.full || t) : 0;
+  if (deg) {
+    const [bx, by, bw, bh] = box, IW = px.width, IH = px.height, Wp = bw / 100 * IW, Hp = bh / 100 * IH;
+    const r = Math.abs(deg) * Math.PI / 180, co = Math.cos(r), si = Math.sin(r), den = co * co - si * si;
+    let w2 = (Wp * co - Hp * si) / den, h2 = (Hp * co - Wp * si) / den;
+    if (!(w2 > 0.3 * Wp && h2 > 0.3 * Hp)) { w2 = Wp * 0.85; h2 = Hp * 0.85; } // steep and squarish: just turn it
+    const nw = w2 / IW * 100, nh = h2 / IH * 100;
+    box = [bx + (bw - nw) / 2, by + (bh - nh) / 2, nw, nh]; out.box = box; out.limit = false; out.deg = deg;
+  }
+  return out;
+}
+
+// The room a line's text can use around its source lettering: the paper between the letters and the first dark
+// stroke (the bubble's outline, a panel line, the art) on every side. Rays from the lettering's edges on several
+// rows/columns, the median distance per side - one stray mark doesn't decide it. Used only to size and place the
+// translation (nothing is painted), so it can be looser than bubbleInterior, which repaints a whole bubble and
+// refuses most of them (page 4, 17 models: interior found for 24 of 188 erased lines; Vietnamese squeezed into
+// the old letters' box came out too small - live report "size quá nhỏ").
+//   core: [x, y, w, h] in % (the lettering), returns [x, y, w, h] in % or null (not on light paper)
+// eslint-disable-next-line no-unused-vars
+function roomAround(px, core) {
+  const { width: W, height: H, data } = px;
+  const x0 = Math.floor(core[0] / 100 * W), y0 = Math.floor(core[1] / 100 * H);
+  const x1 = Math.ceil((core[0] + core[2]) / 100 * W), y1 = Math.ceil((core[1] + core[3]) / 100 * H);
+  if (x1 - x0 < 4 || y1 - y0 < 4) return null;
+  const lum = (x, y) => { const i = (y * W + x) * 4; return 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]; };
+  // light paper around the letters, or there is no "room" to speak of (dark panels, art)
+  let paper = 0, seen = 0;
+  for (let y = y0; y < y1; y += 2) for (const x of [Math.max(0, x0 - 3), Math.min(W - 1, x1 + 2)]) { seen++; if (lum(x, y) > 200) paper++; }
+  if (paper < 0.6 * seen) return null;
+  const grow = Math.round(Math.min(0.1 * Math.min(W, H), 0.8 * Math.max(x1 - x0, y1 - y0)));
+  const dark = (x, y) => lum(x, y) < 150;
+  const ray = (sx, sy, dx, dy) => {
+    let d = 0;
+    for (let x = sx, y = sy; d < grow; d++, x += dx, y += dy) {
+      if (x < 0 || y < 0 || x >= W || y >= H || dark(x, y)) break;
+    }
+    return d;
+  };
+  const med = (a) => a.sort((p, q) => p - q)[a.length >> 1];
+  const rows = [0.2, 0.35, 0.5, 0.65, 0.8].map((f) => Math.round(y0 + f * (y1 - y0)));
+  const cols = [0.2, 0.35, 0.5, 0.65, 0.8].map((f) => Math.round(x0 + f * (x1 - x0)));
+  const l = med(rows.map((y) => ray(x0 - 1, y, -1, 0))), r = med(rows.map((y) => ray(x1, y, 1, 0)));
+  const t = med(cols.map((x) => ray(x, y0 - 1, 0, -1))), b = med(cols.map((x) => ray(x, y1, 0, 1)));
+  // keep clear of the outline: a couple of pixels and a share of the gap
+  const keep = (d) => Math.max(0, Math.round(d * 0.85) - 2);
+  const rx0 = x0 - keep(l), ry0 = y0 - keep(t), rx1 = x1 + keep(r), ry1 = y1 + keep(b);
+  return [rx0 / W * 100, ry0 / H * 100, (rx1 - rx0) / W * 100, (ry1 - ry0) / H * 100];
 }
