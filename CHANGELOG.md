@@ -16,6 +16,12 @@ Các bản tạm "ver 0.6.0" … "ver 0.8.0" (19–20/11/2026) chưa được te
 - **Kéo để chỉnh vị trí bản dịch:** kéo một ô để di chuyển, Shift+kéo để đổi cỡ. Vị trí được nhớ cho trang đó (F5 vẫn giữ). Extension so chỗ bạn đặt với chỗ AI đặt ban đầu; khi một model liên tục đặt lệch cùng một hướng (từ 4 lần sửa, ít nhất 0,8% trang), các trang sau tự dời ô của model đó theo độ lệch ấy trước khi khớp vào chữ.
 - **Đánh số khối chữ trên ảnh gửi cho AI** (học từ các bộ dịch manga mã nguồn mở: máy tự tìm chữ, AI chỉ đọc và dịch). Chữ extension tìm được bằng điểm ảnh được đóng khung đỏ đánh số trên bản ảnh gửi đi; AI ghi số khung cho từng câu và câu đó được đặt đúng vào khung, không phụ thuộc toạ độ AI đoán. Chữ không có khung (chữ trắng nền đen, SFX…) vẫn dùng toạ độ của AI như cũ. Thử với GPT: trang từng bị đảo x/y hàng loạt giờ đặt đúng mọi câu; "I WONDER WHO…" về đúng chỗ thay vì bị gán sang chữ "THROB".
 - **Cài đặt số trang dịch trước** (0–10).
+- **Chữ hiện nhanh hơn** (mỗi mục có công tắc riêng trong Cài đặt → Cách dịch, mặc định bật):
+  - Bong bóng hiện dần ngay khi model viết xong từng câu (đọc câu trả lời theo luồng - streaming - với OpenAI/OpenRouter/Groq/Tùy chỉnh, Gemini, Anthropic), thay vì chờ cả trang. Đo trên Gemini flash-lite: câu đầu sau 1,7 giây, cả trang 3,6 giây. Server nào không hỗ trợ thì tự dùng cách cũ.
+  - Lượt đọc ảnh yêu cầu model suy nghĩ ít (Gemini 3 flash: minimal, Gemini 2.5: tắt, GPT/o-series và gpt-oss: low, qwen trên Groq: none); bước trau chuốt giữ mặc định. Model hoặc cổng nào không nhận tuỳ chọn này thì tự gọi lại như cũ. Chưa đo được với GPT (cổng hết credit lúc kiểm tra); với Gemini flash-lite chưa thấy nhanh hơn rõ.
+  - Khi tắt trau chuốt, lượt đọc ảnh không còn trả trường "ai nói với ai" (ít token hơn).
+  - Trang đã đọc xong ảnh, chỉ còn chờ tới lượt trau chuốt, nhường chỗ trong hàng đợi cho trang sau đọc ảnh ngay.
+- **Bỏ qua chương đã là tiếng Việt, không tốn lượt gọi AI:** trên MangaDex, chương có ngôn ngữ tiếng Việt không bao giờ được gửi đi (đọc từ API chương, miễn phí). Ở trang khác, nếu trang đầu model đọc thấy phần lớn câu gốc đã là tiếng Việt (chỉ tính chữ riêng của tiếng Việt như ă, ơ, ư, đ, ạ, ế…, nên tiếng Tây Ban Nha/Bồ Đào Nha/Pháp không bị nhầm), cả chương dừng gửi; trang đó được ghi nhớ nên F5 không gọi lại. Bấm "Vẫn dịch" ở một trang để dịch cả chương. Tắt được bằng công tắc "Bỏ qua chương đã là tiếng Việt".
 - Hiện số phiên bản trong popup và trang cài đặt.
 
 ### Thay đổi

@@ -14,8 +14,9 @@ vm.runInContext(fs.readFileSync(path.join(ROOT, 'manga-dich/background.js'), 'ut
 
 // stand-in API: every job stays "in flight" until the test releases it, and records when it started
 const started = [], release = new Map();
-vm.runInContext('translateJob = (job) => new Promise((res) => __jobStarted(job.key, res))', Object.assign(ctx, {
-  __jobStarted: (key, res) => { started.push(key); release.set(key, () => res({ bubbles: [] })); },
+const readDone = new Map(); // key -> the job's "image read, only polish left" callback
+vm.runInContext('translateJob = (job, onDraft, rel) => new Promise((res) => __jobStarted(job.key, res, rel))', Object.assign(ctx, {
+  __jobStarted: (key, res, rel) => { started.push(key); release.set(key, () => res({ bubbles: [] })); readDone.set(key, rel); },
 }));
 const enqueue = vm.runInContext('enqueue', ctx), QMAX = vm.runInContext('QMAX', ctx);
 const job = (key) => ({ key, glossary: '' });
@@ -44,5 +45,15 @@ const tick = () => new Promise((r) => setTimeout(r, 10));
   for (const k of ['page1-visible', 'page1-crop', 'plus-press']) release.get(k)();
   await tick();
   assert.deepEqual(started.slice(4), ['page3-ahead', 'page4-ahead']);
+
+  // a page whose image is read and only waits for its polish gives its slot back: the next image is read now
+  enqueue('page5-ahead', job('page5-ahead'), false, () => {});
+  await tick();
+  assert.equal(started.includes('page5-ahead'), false, 'both slots busy');
+  readDone.get('page3-ahead')();
+  await tick();
+  assert.equal(started[6], 'page5-ahead', 'slot freed by a page waiting only for its polish');
+  for (const k of ['page3-ahead', 'page4-ahead', 'page5-ahead']) release.get(k)();
+  await tick();
   console.log('queue OK');
 })().catch((e) => { console.error(e); process.exit(1); });

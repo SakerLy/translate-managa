@@ -54,10 +54,12 @@ VÍ DỤ (bong bóng có chữ nằm ở nửa trên bên trái, chiếm khoản
 {"bubbles": [{"box_2d": [100, 50, 300, 500], "text": "Cậu định đi đâu vậy?", "style": "", "kind": "bubble"}]}`;
 // box_2d [ymin, xmin, ymax, xmax] on a 0-1000 scale is the box format Gemini is trained on (per Google's
 // image-understanding docs); free-form x/y/w/h percentages came back misplaced on a real page.
-const pageJob = (withSrc, withMarks = false) => ({
-  name: 'bubbles',
+// withWho: "who" (speaker → listener) only feeds the polish pass's pronoun choices; the memory-only pass (polish off)
+// does without it - fewer tokens to write before the page can show (live request: faster text)
+const pageJob = (withSrc, withMarks = false, withWho = withSrc) => ({
+  name: 'bubbles', fast: true, // read pass: little or no thinking (see FAST_READ)
   // src (the original text) is only needed by polish(); it costs ~500 output tokens a page, so skip it otherwise
-  system: SYSTEM + ' ' + (withSrc ? 'Mỗi mục thêm "src": chữ gốc đúng như trong ảnh (bên cạnh "text" là bản dịch), và "who": ai nói với ai theo tranh, dạng "người nói (giới, tuổi/vai) → người nghe (giới, tuổi/vai)" - GIỚI và TUỔI ước lượng từ nét vẽ là BẮT BUỘC vì chúng quyết định xưng hô (vd "em gái nhỏ → anh trai học sinh", "phụ nữ trung niên → nữ sinh (bạn của con bà)", "nữ sinh → phụ nữ trung niên", "cậu bé → ông nội", "thầy giáo → cả lớp", "dẫn truyện"); người nói không thấy trong khung thì suy từ mạch thoại (câu đáp thường là của người vừa bị hỏi); không rõ thì để "".' : '')
+  system: SYSTEM + ' ' + (withSrc ? 'Mỗi mục thêm "src": chữ gốc đúng như trong ảnh (bên cạnh "text" là bản dịch).' : '') + (withWho ? ' Mỗi mục thêm "who": ai nói với ai theo tranh, dạng "người nói (giới, tuổi/vai) → người nghe (giới, tuổi/vai)" - GIỚI và TUỔI ước lượng từ nét vẽ là BẮT BUỘC vì chúng quyết định xưng hô (vd "em gái nhỏ → anh trai học sinh", "phụ nữ trung niên → nữ sinh (bạn của con bà)", "nữ sinh → phụ nữ trung niên", "cậu bé → ông nội", "thầy giáo → cả lớp", "dẫn truyện"); người nói không thấy trong khung thì suy từ mạch thoại (câu đáp thường là của người vừa bị hỏi); không rõ thì để "".' : '')
     + ' Đánh dấu "sfx": true cho MỌI mục là từ tượng thanh (SFX) - kể cả SFX dài/trang trí.',
   schema: {
     type: 'object', additionalProperties: false, required: ['bubbles'],
@@ -65,10 +67,10 @@ const pageJob = (withSrc, withMarks = false) => ({
       bubbles: {
         type: 'array',
         items: {
-          type: 'object', additionalProperties: false, required: ['box_2d', ...(withSrc ? ['src', 'who'] : []), ...(withMarks ? ['marks'] : []), 'text', 'sfx', 'style', 'kind'], // OpenAI strict mode: every property must be listed
+          type: 'object', additionalProperties: false, required: ['box_2d', ...(withSrc ? ['src'] : []), ...(withWho ? ['who'] : []), ...(withMarks ? ['marks'] : []), 'text', 'sfx', 'style', 'kind'], // OpenAI strict mode: every property must be listed
           properties: {
             box_2d: { type: 'array', items: { type: 'number' } },
-            ...(withSrc && { src: { type: 'string' }, who: { type: 'string' } }),
+            ...(withSrc && { src: { type: 'string' } }), ...(withWho && { who: { type: 'string' } }),
             ...(withMarks && { marks: { type: 'array', items: { type: 'integer' } } }), // numbered red frames this line sits in
             text: { type: 'string' },
             sfx: { type: 'boolean' }, // true = onomatopoeia/SFX; filtered out when the user turns SFX off
@@ -287,6 +289,70 @@ async function api(url, init) {
     if (wait) err.sleptThrough = true;
     throw err;
   }
+}
+
+// Streaming read (live request: faster text): the answer arrives as server-sent events and every delta is handed
+// to onText with the whole text so far, so finished bubbles can be drawn while the model is still writing the rest.
+// pick(event) -> { text, finish } for one event. A server that ignores "stream" and answers plain JSON is read as
+// such ({ json }). An HTTP error throws like api() does (no countdown sleep here: the queue's retry waits it out).
+async function apiStream(url, init, pick, onText) {
+  const secs = init.timeoutS ?? TIMEOUT_S;
+  let res;
+  try {
+    res = await fetch(url, { ...init, signal: AbortSignal.timeout(secs * 1000) });
+  } catch (e) {
+    if (e.name === 'TimeoutError') throw new Error(`Model không trả lời sau ${secs} giây - chọn model nhanh hơn trong Cài đặt.`);
+    throw new Error('Không kết nối được tới API: ' + e.message);
+  }
+  if (!res.ok || !/event-stream/i.test(res.headers?.get?.('content-type') || '')) {
+    const body = await res.json().catch(() => ({}));
+    if (res.ok) return { json: body };
+    let raw = body?.error?.metadata?.raw;
+    try { raw = JSON.parse(raw)?.error?.message || raw; } catch { /* plain text */ }
+    throw new Error([body?.error?.message || body?.msg || '', typeof raw === 'string' ? raw.slice(0, 300) : ''].filter(Boolean).join(': ') || 'HTTP ' + res.status);
+  }
+  const reader = res.body.getReader(), dec = new TextDecoder();
+  let buf = '', text = '', finish = '';
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split(/\r?\n/);
+      buf = lines.pop();
+      let grew = false;
+      for (const line of lines) {
+        const m = /^data:\s?(.*)$/.exec(line);
+        if (!m || !m[1] || m[1] === '[DONE]') continue;
+        let ev;
+        try { ev = JSON.parse(m[1]); } catch { continue; }
+        if (ev.error) throw new Error(ev.error.message || String(ev.error));
+        const p = pick(ev);
+        if (p.text) { text += p.text; grew = true; }
+        if (p.finish) finish = p.finish;
+      }
+      if (grew) try { onText(text); } catch { /* a preview must never break the read */ }
+    }
+  } catch (e) {
+    if (e.name === 'TimeoutError') throw new Error(`Model không trả lời sau ${secs} giây - chọn model nhanh hơn trong Cài đặt.`);
+    throw e;
+  }
+  return { text, finish };
+}
+
+// The bubbles a streamed answer has finished so far: each complete {...} inside "bubbles": [ ... ], as JSON text.
+function completeItems(text) {
+  const at = text.search(/"bubbles"\s*:\s*\[/);
+  if (at < 0) return [];
+  const out = [];
+  let depth = 0, inStr = false, esc = false, from = -1;
+  for (let i = text.indexOf('[', at) + 1; i < text.length; i++) {
+    const ch = text[i];
+    if (inStr) { if (esc) esc = false; else if (ch === '\\') esc = true; else if (ch === '"') inStr = false; continue; }
+    if (ch === '"') inStr = true;
+    else if (ch === '{') { if (!depth) from = i; depth++; } else if (ch === '}') { depth--; if (!depth && from >= 0) { out.push(text.slice(from, i + 1)); from = -1; } } else if (ch === ']' && !depth) break;
+  }
+  return out;
 }
 
 const json = (headers, body, timeoutS) => ({ method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body), timeoutS });
@@ -525,15 +591,30 @@ const cap = (ex, maxTokens) => (maxTokens && ex.max_tokens > maxTokens ? { ...ex
 // jsonObject: ask for {"type": "json_object"} with the schema spelled out in the system prompt instead of
 // strict json_schema. Groq's constrained decoding broke qwen3.8's output 2 times in 5 ({"bubs"}, {"b-inter:
 // "Failed to generate JSON"); json_object came back valid 10 times in 10 on the same image.
-const openaiCompat = (base, keep, extra = () => ({}), rank = () => 0, jsonObject = false) => ({
+// Reading a page is looking, not reasoning: models that "think" first (Gemini 2.5/3, GPT-5/o-series, gpt-oss) spent
+// most of a page's time on it (live request: faster text). The read pass asks for little or no thinking; polish
+// keeps the model's default. A model or gateway that rejects the setting is asked again without it, and
+// remembered for the rest of the session. FAST_READ = false restores the old calls (A/B in tests/live).
+let FAST_READ = true;
+const slowOnly = new Set(); // provider base + model that refused the low-thinking setting
+const FAST_REJECTED = /reasoning|thinking|effort|unsupported|unrecognized|not supported|unknown (?:parameter|field|name)|invalid.*(?:param|argument|field)/i;
+async function maybeFast(id, fastWanted, send) {
+  const fast = FAST_READ && fastWanted && !slowOnly.has(id);
+  try { return await send(fast); } catch (e) {
+    if (!fast || !FAST_REJECTED.test(String(e.message))) throw e;
+    slowOnly.add(id);
+    return send(false);
+  }
+}
+const openaiCompat = (base, keep, extra = () => ({}), rank = () => 0, jsonObject = false, fastParams = () => ({ reasoning_effort: 'low' })) => ({
   base,
   listHeaders: bearer,
   async models(key) {
     const { data } = await api(`${this.base}/models`, { headers: bearer(key) });
     return data.filter(keep).sort((a, b) => rank(a) - rank(b) || (b.created ?? 0) - (a.created ?? 0)).map((m) => m.id);
   },
-  async translate(key, model, img, prompt, timeoutS, job = PAGE_JOB) {
-    const body = await api(`${this.base}/chat/completions`, json(bearer(key), {
+  async translate(key, model, img, prompt, timeoutS, job = PAGE_JOB, onText) {
+    const req = (fast, stream) => json(bearer(key), {
       model,
       messages: [
         { role: 'system', content: jsonObject ? job.system + '\nTrả lời DUY NHẤT một object JSON theo đúng JSON Schema này: ' + JSON.stringify(job.schema) : job.system },
@@ -542,7 +623,23 @@ const openaiCompat = (base, keep, extra = () => ({}), rank = () => 0, jsonObject
       ],
       response_format: jsonObject ? { type: 'json_object' } : { type: 'json_schema', json_schema: { name: job.name, strict: true, schema: job.schema } },
       ...cap(extra(model), job.maxTokens),
-    }, timeoutS));
+      ...(fast && fastParams(model)),
+      ...(stream && { stream: true }),
+    }, timeoutS);
+    const id = this.base + ' ' + model;
+    if (onText) {
+      const r = await maybeFast(id, job.fast, (fast) => apiStream(`${this.base}/chat/completions`, req(fast, true),
+        (ev) => ({ text: ev.choices?.[0]?.delta?.content || '', finish: ev.choices?.[0]?.finish_reason || '' }), onText));
+      if (!r.json) {
+        if (r.finish === 'length') throw new Error('Model hết giới hạn token trước khi dịch xong trang này.');
+        if (!r.text) throw new Error('Model không trả về bản dịch.');
+        return r.text;
+      }
+      return this.answer(r.json); // the server ignored "stream": a normal answer
+    }
+    return this.answer(await maybeFast(id, job.fast, (fast) => api(`${this.base}/chat/completions`, req(fast, false))));
+  },
+  answer(body) {
     if (body.choices?.[0]?.finish_reason === 'length') throw new Error('Model hết giới hạn token trước khi dịch xong trang này.');
     const msg = body.choices?.[0]?.message;
     if (!msg?.content) throw new Error(msg?.refusal || 'Model không trả về bản dịch.');
@@ -562,8 +659,8 @@ const PROVIDERS = {
       // API lists newest first and reports capabilities per model
       return data.filter((m) => m.capabilities?.image_input?.supported && m.capabilities?.structured_outputs?.supported).map((m) => m.id);
     },
-    async translate(key, model, img, prompt, timeoutS, job = PAGE_JOB) {
-      const body = await api(`${this.base}/messages`, json(
+    async translate(key, model, img, prompt, timeoutS, job = PAGE_JOB, onText) {
+      const req = (stream) => json(
         anthropicHeaders(key),
         {
           model,
@@ -571,9 +668,19 @@ const PROVIDERS = {
           system: job.system,
           output_config: { format: { type: 'json_schema', schema: job.schema } },
           messages: [{ role: 'user', content: [...(img ? [{ type: 'image', source: { type: 'base64', media_type: img.mime, data: img.data } }] : []), { type: 'text', text: prompt }] }],
+          ...(stream && { stream: true }),
         },
         timeoutS,
-      ));
+      );
+      if (onText) {
+        const r = await apiStream(`${this.base}/messages`, req(true),
+          (ev) => ({ text: ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta' ? ev.delta.text : '', finish: ev.type === 'message_delta' ? ev.delta?.stop_reason || '' : '' }), onText);
+        if (r.json) return r.json.content.find((b) => b.type === 'text').text;
+        if (r.finish === 'refusal') throw new Error('Model từ chối dịch trang này.');
+        if (!r.text) throw new Error('Model không trả về bản dịch.');
+        return r.text;
+      }
+      const body = await api(`${this.base}/messages`, req(false));
       if (body.stop_reason === 'refusal') throw new Error('Model từ chối dịch trang này.');
       return body.content.find((b) => b.type === 'text').text;
     },
@@ -596,14 +703,31 @@ const PROVIDERS = {
         // flash-lite first: on free keys it's the one that answers (newer pro/flash hit "quota" or 30s timeouts)
         .sort((a, b) => /flash-lite/.test(b) - /flash-lite/.test(a) || geminiVer(b) - geminiVer(a) || a.localeCompare(b));
     },
-    async translate(key, model, img, prompt, timeoutS, job = PAGE_JOB) {
-      const body = await api(`${this.base}/models/${model}:generateContent`, json({ 'x-goog-api-key': key }, {
+    async translate(key, model, img, prompt, timeoutS, job = PAGE_JOB, onText) {
+      // Gemini 3: thinkingLevel; 2.5: a token budget (0 = off; Pro can't go under 128). Older models don't think.
+      // flash/flash-lite: "minimal" ("low" was no faster than flash-lite's own default on 2 truth pages x 2 runs,
+      // sometimes slower); Pro has no minimal level
+      const v = geminiVer(model);
+      const thinking = v >= 3 ? { thinkingLevel: /flash/.test(model) ? 'minimal' : 'low' } : v >= 2.5 ? { thinkingBudget: /pro/.test(model) ? 128 : 0 } : null;
+      const req = (fast) => json({ 'x-goog-api-key': key }, {
         systemInstruction: { parts: [{ text: job.system }] },
         contents: [{ role: 'user', parts: [...(img ? [{ inlineData: { mimeType: img.mime, data: img.data } }] : []), { text: prompt }] }],
-        generationConfig: { responseMimeType: 'application/json', responseJsonSchema: job.schema },
-      }, timeoutS));
-      const text = body.candidates?.[0]?.content?.parts?.filter((p) => !p.thought).map((p) => p.text || '').join('');
-      if (!text) throw new Error('Gemini chặn trang này: ' + (body.promptFeedback?.blockReason || body.candidates?.[0]?.finishReason || 'không rõ'));
+        generationConfig: { responseMimeType: 'application/json', responseJsonSchema: job.schema, ...(fast && { thinkingConfig: thinking }) },
+      }, timeoutS);
+      const textOf = (b) => b.candidates?.[0]?.content?.parts?.filter((p) => !p.thought).map((p) => p.text || '').join('') || '';
+      const blocked = (b) => new Error('Gemini chặn trang này: ' + (b?.promptFeedback?.blockReason || b?.candidates?.[0]?.finishReason || 'không rõ'));
+      const id = this.base + ' ' + model;
+      if (onText) {
+        let last = null;
+        const r = await maybeFast(id, job.fast && !!thinking, (fast) => apiStream(`${this.base}/models/${model}:streamGenerateContent?alt=sse`, req(fast),
+          (ev) => { last = ev; return { text: textOf(ev), finish: ev.candidates?.[0]?.finishReason || '' }; }, onText));
+        const text = r.json ? textOf(Array.isArray(r.json) ? r.json[r.json.length - 1] : r.json) : r.text;
+        if (!text) throw blocked(r.json || last);
+        return text;
+      }
+      const body = await maybeFast(id, job.fast && !!thinking, (fast) => api(`${this.base}/models/${model}:generateContent`, req(fast)));
+      const text = textOf(body);
+      if (!text) throw blocked(body);
       return text;
     },
   },
@@ -612,7 +736,9 @@ const PROVIDERS = {
   // deprecated for max_completion_tokens. The list has no vision flag, so probe() decides which work.
   // Speech (whisper), voice (orpheus) and guard/classifier models can't chat or read pages: not listed.
   groq: openaiCompat('https://api.groq.com/openai/v1', (m) => m.active !== false && !/whisper|orpheus|tts|guard|playai|distil/i.test(m.id),
-    () => ({ max_completion_tokens: 4096 }), () => 0, true),
+    () => ({ max_completion_tokens: 4096 }), () => 0, true,
+    // Groq's own values: gpt-oss takes low/medium/high, qwen3 only none/default; the rest don't think
+    (m) => (/gpt-oss/.test(m) ? { reasoning_effort: 'low' } : /qwen/.test(m) ? { reasoning_effort: 'none' } : {})),
   // Without max_tokens OpenRouter reserves credit for the model's full output limit (65536 seen in a real
   // run) and rejects low-balance keys. A dense real page's JSON is ~1100 chars; 4096 leaves room for reasoning.
   // :free models cost nothing to reserve, and a reasoning one (nemotron :free) ran out at 4096 on a real page.
@@ -620,7 +746,8 @@ const PROVIDERS = {
     m.architecture?.input_modalities?.includes('image') && m.supported_parameters?.includes('structured_outputs')
     && !m.id.endsWith(':batch'), (model) => ({ max_tokens: model.endsWith(':free') ? 16000 : 4096 }),
     // free first: priced at 0 per the model list itself (also catches openrouter/free, which has no :free suffix)
-    (m) => (+m.pricing?.prompt === 0 && +m.pricing?.completion === 0 ? 0 : 1)),
+    (m) => (+m.pricing?.prompt === 0 && +m.pricing?.completion === 0 ? 0 : 1),
+    false, () => ({ reasoning: { effort: 'low' } })), // OpenRouter's own field: passed on to models that think, ignored by the rest
   // Any OpenAI-compatible server the user points at (Ollama, LM Studio, vLLM, a proxy…). No default URL.
   custom: openaiCompat('', () => true, () => ({ max_tokens: 4096 })),
 };
@@ -676,8 +803,8 @@ async function cacheKey(model, data) {
 // Pruning reads ALL of storage (every cached page, draft and memory): on the first save after the worker starts
 // (MV3 restarts it often, a plain counter could never reach its mark), then every 20th - not on every page.
 let cachePuts = 0;
-async function cachePut(key, bubbles) {
-  await chrome.storage.local.set({ [key]: { t: Date.now(), bubbles } });
+async function cachePut(key, bubbles, extra = {}) {
+  await chrome.storage.local.set({ [key]: { t: Date.now(), bubbles, ...extra } });
   if (cachePuts++ % 20) return;
   const all = await chrome.storage.local.get(null);
   const entries = Object.keys(all).filter((k) => /^[cd]:/.test(k));
@@ -772,12 +899,16 @@ function memBlock(mem) {
 const QMAX = 2, Q_TRIES = 3;
 let Q_RETRY_MS = 5000; // per-try backoff; the unit test shortens it
 const pending = [], running = new Set(), waiters = new Map(); // waiters: key -> Set of {resolve, onDraft}
+// A page whose image is read only waits for its polish turn (one per series, text only): it gives its slot back
+// so the next page's image is read meanwhile - the slot used to sit idle through the whole polish queue
+const released = new Set();
+const busy = () => running.size - released.size;
 let wakeTimer = null;
 
 async function enqueue(key, job, urgent, resolve, onDraft, tag) {
   // a twin request may have finished while we were getting here: its result is already in the cache
   const hit = (await chrome.storage.local.get(key))[key];
-  if (hit) { resolve({ bubbles: hit.bubbles, glossary: job.glossary }); return; }
+  if (hit && !(hit.vi && job.noVi)) { resolve({ bubbles: hit.bubbles, glossary: job.glossary, ...(hit.vi && { vi: true }) }); return; }
   let w = waiters.get(key);
   if (!w) waiters.set(key, (w = new Set()));
   w.add({ resolve, onDraft, tag });
@@ -812,8 +943,8 @@ function pump() {
   // One spare slot for urgent work (the page on screen, a "+" press): with both slots busy on the visible page's
   // polish and a later page, its missed-text call used to wait for them (user report). Normal work stays at
   // QMAX so a gateway is never hit harder than before.
-  while (running.size < QMAX || (running.size < QMAX + 1 && pending.some((p) => p.urgent))) {
-    const i = running.size < QMAX
+  while (busy() < QMAX || (busy() < QMAX + 1 && pending.some((p) => p.urgent))) {
+    const i = busy() < QMAX
       ? pending.findIndex((p) => p.urgent || !(p.notBefore > Date.now())) // backoff only defers non-urgent retries
       : pending.findIndex((p) => p.urgent);
     if (i < 0) { // everything left is in backoff: wake up when the first one is due
@@ -829,17 +960,19 @@ function pump() {
 async function run(item) {
   const { key, job } = item;
   try {
-    const res = await translateJob(job, (draft) => {
+    job.live = [...(waiters.get(key) || [])].some((w) => w.onDraft); // a page is waiting to show it: stream the read
+    const res = await translateJob(job, (draft, partial) => {
       // the read pass just produced boxes: show them before polish runs (a visible page goes from
-      // ~2 calls' latency to 1 - measured on glm-4.6v: draft at 5-8s, polished +2.5s later)
-      for (const w of waiters.get(key) || []) w.onDraft?.(draft);
-    });
+      // ~2 calls' latency to 1 - measured on glm-4.6v: draft at 5-8s, polished +2.5s later); partial = streamed so far
+      for (const w of waiters.get(key) || []) w.onDraft?.(draft, partial);
+    }, () => { released.add(key); pump(); });
     const w = waiters.get(key);
     waiters.delete(key);
     running.delete(key); // before resolving: a caller arriving now re-checks the cache instead of attaching to a dead waiter
+    released.delete(key);
     w?.forEach((f) => f.resolve(res));
   } catch (e) {
-    running.delete(key);
+    running.delete(key); released.delete(key);
     job.tries = e.sleptThrough ? Q_TRIES : (job.tries || 0) + 1;
     if (job.tries < Q_TRIES) {
       // flaky answer (broken JSON, HTTP 524, a 200-wrapped gateway error): retry with backoff, but
@@ -865,10 +998,11 @@ async function run(item) {
 }
 
 // translate(): resolve provider + cache check, then hand the work to the queue
-async function translate({ data, mime, w, h, url, context, glossary = '', site, seriesLabel = '', urgent, onDraft, part = false, tag, draftPort, marks }) {
+async function translate({ data, mime, w, h, url, context, glossary = '', site, seriesLabel = '', urgent, onDraft, part = false, tag, draftPort, marks, noVi = false }) {
   if (!data) ({ data, mime } = await fetchImage(url));
-  const { provider = 'anthropic', keys = {}, models = {}, bases = {}, polishModels = {}, polish: polishOn = true, sfx = true }
-    = await chrome.storage.local.get(['provider', 'keys', 'models', 'bases', 'polishModels', 'polish', 'sfx']);
+  const { provider = 'anthropic', keys = {}, models = {}, bases = {}, polishModels = {}, polish: polishOn = true, sfx = true, skipVi = true, stream = true, fastRead = true }
+    = await chrome.storage.local.get(['provider', 'keys', 'models', 'bases', 'polishModels', 'polish', 'sfx', 'skipVi', 'stream', 'fastRead']);
+  if (!skipVi) noVi = true; // switch off: a page in Vietnamese is translated like any other (and a stored "already Vietnamese" is read again)
   // the text-only rewrite can run on a stronger model than the image reader (reading wants fast, writing
   // wants good: on the same drafts gemini-3.5-flash left 0 stiff lines where flash-lite left 3)
   const polishModel = polishModels[provider] || models[provider];
@@ -883,12 +1017,13 @@ async function translate({ data, mime, w, h, url, context, glossary = '', site, 
     if (cur && cur.label !== seriesLabel) await chrome.storage.local.set({ [mk]: { ...cur, label: String(seriesLabel).slice(0, 120) } });
   }
   const hit = (await chrome.storage.local.get(key))[key];
-  if (hit) return { bubbles: hit.bubbles, glossary, key, moves: hit.moves }; // same page already translated by this model: no API call
+  // (a page stored as "already Vietnamese" is read again when you press "Vẫn dịch" on it)
+  if (hit && !(hit.vi && noVi)) return { bubbles: hit.bubbles, glossary, key, moves: hit.moves, ...(hit.vi && { vi: true }) }; // same page already translated by this model: no API call
   // the read pass alone (no polish model in it): reused when only the polish was lost (reload, error)
   const draftKey = 'd' + (await cacheKey(models[provider] + (sfx ? '' : '-sfx') + (part ? '+part' : ''), data)).slice(1);
   // numbered text blocks drawn on the image by the page (content.js grab): checked here, they come from a page
   const okMarks = Array.isArray(marks) && !part ? marks.filter((m) => m && Number.isInteger(m.id) && ['x', 'y', 'w', 'h'].every((k) => Number.isFinite(m[k]))).slice(0, 40) : [];
-  const job = { key, draftKey, size: w > 0 && h > 0 ? { w, h } : null, data, mime, context, glossary, site, seriesLabel, provider, base: bases[provider], model: models[provider], polishModel, apiKey: keys[provider], doPolish, sfx, part, marks: okMarks };
+  const job = { key, draftKey, size: w > 0 && h > 0 ? { w, h } : null, data, mime, context, glossary, site, seriesLabel, provider, base: bases[provider], model: models[provider], polishModel, apiKey: keys[provider], doPolish, sfx, part, marks: okMarks, noVi, stream, fastRead };
   return new Promise((resolve) => enqueue(key, job, urgent, (r) => resolve(r?.error ? r : { ...r, key }), onDraft, tag || draftPort));
 }
 
@@ -908,7 +1043,16 @@ function seriesTurn(site, fn) {
 // onDraft(bubbles): called with the read pass's boxes as soon as they exist, before polish.
 // sfx=false drops the model's SFX-tagged bubbles before polish and before the draft is pushed,
 // so both paints and the cache agree on what the user asked to see.
-async function translateJob(job, onDraft) {
+// Most of the page's source lines (as the model read them, "src") already carry Vietnamese diacritics. Two
+// real lines at least: one "Á!" is not a chapter. SFX and 1-word lines prove nothing either way.
+// letters only Vietnamese writes: á é ó ã ê ô… are Spanish/Portuguese/French too ("¿Qué está…" is not Vietnamese)
+const VI_MARKS = /[ạảầấậẩẫăằắặẳẵẹẻẽềếệểễịỉĩọỏồốộổỗơờớợởỡụủũưừứựửữỳỵỷỹđ]/i;
+function viPage(bubbles) {
+  const lines = bubbles.filter((b) => !b.sfx && typeof b.src === 'string' && b.src.trim().split(/\s+/).length >= 2);
+  return lines.length >= 2 && lines.filter((b) => VI_MARKS.test(b.src)).length >= 0.6 * lines.length;
+}
+
+async function translateJob(job, onDraft, release) {
   const { key, draftKey, size, data, mime, context, glossary = '', site, seriesLabel = '', provider, base, model, polishModel = model, apiKey, doPolish, sfx = true, part = false, marks = [] } = job;
   const P = providerFor(provider, base);
   // memory của site: xưng hô/tên riêng/văn phong học từ các trang & chapter trước
@@ -925,7 +1069,8 @@ async function translateJob(job, onDraft) {
   const markNote = !part && marks.length ? `\n\nẢnh có ${marks.length} khung đỏ đánh số (1-${marks.length}) quanh những chỗ có thể là chữ. Khung và số đỏ KHÔNG phải chữ của truyện - không dịch chúng; có khung không chứa chữ (nét vẽ) - bỏ qua. Với mỗi mục: "marks" = số của (các) khung chứa chữ của mục đó (một bong bóng nằm trong 2 khung thì ghi cả 2); chữ không nằm trong khung nào thì "marks": [] và box_2d như thường. Vẫn ghi box_2d cho mọi mục.` : '';
   const prompt = (head ? head + '\n\n' : '') + where + markNote;
   const learn = !doPolish && !part && !!site; // polish off: a memory-only text call after the page (src/who needed)
-  const call = () => P.translate(apiKey, model, { data, mime }, prompt, undefined, pageJob(doPolish || learn, marks.length > 0));
+  const readJob = { ...pageJob(doPolish || learn, marks.length > 0, doPolish), fast: job.fastRead !== false }; // the "AI đọc ảnh nhanh" switch
+  const call = () => P.translate(apiKey, model, { data, mime }, prompt, undefined, readJob);
   // Already read before (F5 / extension reload / a polish error mid-page): the image was paid for once,
   // reuse those lines and only redo the text-only polish - never send the image again.
   const saved = draftKey && !part && (await chrome.storage.local.get(draftKey))[draftKey];
@@ -936,7 +1081,19 @@ async function translateJob(job, onDraft) {
   // (recovery crops answer without src: "..." for a dotted bubble, drawn as a strip over the hair, 66dcdbac/9)
   const marksOnly = (b) => (typeof b.src === 'string' && b.src.trim() && !/[\p{L}\p{N}]/u.test(b.src)) || !/[\p{L}\p{N}]/u.test(String(b.text));
   const notEcho = (list) => list.filter((b) => !marksOnly(b) && !ECHO.some((e) => String(b.text).toLowerCase().includes(e)));
-  const read = async () => shiftByLearnt(notEcho(parseBubbles(await call(), size, marks)), provider + '/' + model, part);
+  // Streamed read (the first call only): each bubble the model has finished writing is shown at once, as a preview
+  // (live request: faster text) - the full answer then replaces it exactly as before.
+  let shown = 0;
+  const preview = onDraft && job.live && job.stream !== false && !part ? (full) => {
+    const items = completeItems(full);
+    if (items.length <= shown) return;
+    let list;
+    try { list = notEcho(parseBubbles('{"bubbles":[' + items.join(',') + ']}', size, marks)); } catch { return; }
+    if (!sfx) list = list.filter((b) => !b.sfx);
+    shown = items.length;
+    if (list.length) onDraft(list, true);
+  } : undefined;
+  const read = async () => shiftByLearnt(notEcho(parseBubbles(await (shown || !preview ? call() : P.translate(apiKey, model, { data, mime }, prompt, undefined, readJob, preview)), size, marks)), provider + '/' + model, part);
   let bubbles = saved ? saved.bubbles : await read();
   if (!saved) {
   // a page that clearly has text but came back with zero boxes is a model flake (seen with gpt-5.6-sol,
@@ -949,14 +1106,22 @@ async function translateJob(job, onDraft) {
   const untranslated = (b) => !b.sfx && b.text.split(/\s+/).length >= 3 && !VI.test(b.text);
   if (bubbles.some(untranslated)) {
     const warn = 'LƯU Ý: lần trước trường "text" bị trả NGUYÊN VĂN ngôn ngữ gốc. "text" PHẢI là bản dịch TIẾNG VIỆT.\n\n';
-    const again = await P.translate(apiKey, model, { data, mime }, warn + prompt, undefined, pageJob(doPolish || learn, marks.length > 0)).then((t) => notEcho(parseBubbles(t, size, marks)), () => []);
+    const again = await P.translate(apiKey, model, { data, mime }, warn + prompt, undefined, readJob).then((t) => notEcho(parseBubbles(t, size, marks)), () => []);
     if (again.length && !again.some(untranslated)) bubbles = again;
     else bubbles = bubbles.filter((b) => !untranslated(b));
   }
   if (!sfx) bubbles = bubbles.filter((b) => !b.sfx); // user turned SFX off: drop tagged bubbles
   if (draftKey && !part && doPolish) await chrome.storage.local.set({ [draftKey]: { t: Date.now(), bubbles } });
   }
+  // The page is already in Vietnamese (a Vietnamese scanlation): nothing to translate. Stored as such, so F5 costs
+  // nothing, and the reader stops calling for the rest of the chapter (content.js). No polish, no memory either.
+  if (!part && !job.noVi && viPage(bubbles)) {
+    await cachePut(key, [], { vi: true });
+    if (draftKey) await chrome.storage.local.remove(draftKey).catch(() => {});
+    return { bubbles: [], glossary, vi: true };
+  }
   onDraft?.(bubbles);
+  if (doPolish) release?.(); // the image is read: only the text-only polish is left
   let g = glossary;
   if (doPolish) await seriesTurn(site, async () => {
     // Pages are read in parallel but polished one at a time per series, each with the memory as the
@@ -1012,15 +1177,15 @@ chrome.runtime.onConnect.addListener((port) => {
   draftPorts.set(port.name, port);
   port.onDisconnect.addListener(() => draftPorts.delete(port.name));
 });
-const pushDraft = (portName, bubbles) => {
+const pushDraft = (portName, bubbles, partial) => {
   const port = draftPorts.get(portName);
   if (!port) return;
-  try { port.postMessage({ type: 'draft', bubbles }); } catch { draftPorts.delete(portName); }
+  try { port.postMessage({ type: 'draft', bubbles, ...(partial && { partial: true }) }); } catch { draftPorts.delete(portName); }
 };
 
 chrome.runtime.onMessage.addListener((msg, _sender, send) => {
   const job = msg.type === 'hello' ? Promise.resolve({ api: API })
-    : msg.type === 'translate' ? translate(msg.draftPort ? { ...msg, onDraft: (bubbles) => pushDraft(msg.draftPort, bubbles) } : msg)
+    : msg.type === 'translate' ? translate(msg.draftPort ? { ...msg, onDraft: (bubbles, partial) => pushDraft(msg.draftPort, bubbles, partial) } : msg)
     : msg.type === 'models' ? Promise.resolve().then(() => providerFor(msg.provider, msg.base).models(msg.key)).then((list) => ({ list }))
     : msg.type === 'probe' ? probe(msg).then((sample) => ({ sample }))
     : msg.type === 'defaults' ? Promise.resolve({ bases: Object.fromEntries(Object.entries(PROVIDERS).map(([k, p]) => [k, p.base])) })
@@ -1106,7 +1271,8 @@ async function seriesInfo({ url }) {
   if (!manga?.id) return { key: '' };
   const t = manga.attributes?.title || {};
   const label = t.en || t['ja-ro'] || Object.values(t)[0] || (manga.attributes?.altTitles || []).map((x) => Object.values(x)[0]).find(Boolean) || '';
-  const out = { key: `mangadex.org/title/${manga.id.toLowerCase()}`, label: String(label).slice(0, 120) };
+  // lang: the chapter's own language - a Vietnamese upload is never sent to the AI (content.js)
+  const out = { key: `mangadex.org/title/${manga.id.toLowerCase()}`, label: String(label).slice(0, 120), lang: String(j?.data?.attributes?.translatedLanguage || '') };
   seriesCache.set(m[1], out);
   return out;
 }

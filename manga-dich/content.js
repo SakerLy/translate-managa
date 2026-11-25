@@ -44,6 +44,22 @@
     return seriesByUrl.get(url);
   };
   const reader = () => typeof mdIsReader !== 'function' || mdIsReader(location.pathname);
+  // Chapters already in Vietnamese are never sent to the AI (live request: no paid call for nothing). MangaDex
+  // says so in its chapter API (free); anywhere else the first page the model reads tells (background viPage) and
+  // the rest of the chapter is skipped. "Vẫn dịch" on one page lets the whole chapter through.
+  const chapterOf = () => location.pathname.replace(/\/\d+\/?$/, ''); // /chapter/<id>/5 -> /chapter/<id>
+  const viChapters = new Set(), viForced = new Set(), langByChapter = new Map();
+  const chapterVi = async () => {
+    const ch = chapterOf();
+    if (window.__md.skipVi === false || viForced.has(ch)) return false; // the settings switch
+    if (viChapters.has(ch)) return true;
+    if (SITE !== 'mangadex.org' || !reader()) return false;
+    if (!langByChapter.has(ch)) {
+      langByChapter.set(ch, chrome.runtime.sendMessage({ type: 'series-info', url: location.href.split('#')[0] }).then((r) => r?.lang || '', () => ''));
+    }
+    return /^vi\b/i.test(await langByChapter.get(ch));
+  };
+  const VI_SKIP = 'Chương này đã là tiếng Việt - không gửi cho AI để tiết kiệm lượt gọi';
 
   const css = document.createElement('style');
   css.textContent = `
@@ -429,7 +445,7 @@
     el.className = 'md-layer';
     const status = document.createElement('div');
     status.className = 'md-status';
-    const o = { img, el, src: srcOf(img), status, busy: true, tag: 'md-draft-' + Math.random().toString(36).slice(2) };
+    const o = { img, el, src: srcOf(img), status, busy: true, chapter: chapterOf(), tag: 'md-draft-' + Math.random().toString(36).slice(2) };
     // Huỷ: stop waiting for this page and drop its queued API call. A call already in flight finishes in
     // the background and lands in the cache, so "Dịch lại" later costs nothing.
     const cancelBtn = document.createElement('button');
@@ -455,6 +471,25 @@
     };
     cancelBtn.onclick = (e) => { e.stopPropagation(); o.cancel(); };
     o.say = (text) => { if (!o.cancelled) { status.replaceChildren(text, cancelBtn); el.append(status); } };
+    // Not sent to the AI (no text on the page, or the chapter is already Vietnamese): a small badge with an override.
+    o.skip = (text, onForce) => {
+      img.dataset.mdDone = 'skip'; // not '1': "Vẫn dịch" must be able to retry it
+      status.textContent = text;
+      const force = document.createElement('button');
+      force.className = 'md-retry';
+      force.textContent = 'Vẫn dịch';
+      force.onclick = () => { // override once: mark translated and re-enter the pipeline
+        onForce?.();
+        const k = overlays.indexOf(o);
+        if (k >= 0) overlays.splice(k, 1);
+        o.el.remove();
+        translate(img, context, urgent, true); // forced: skips the checks, straight to the API
+      };
+      status.append(force);
+      el.replaceChildren(status);
+      clearInterval(timer);
+      o.busy = false;
+    };
     const t0 = Date.now();
     const tick = () => o.say(`Đang dịch… ${Math.round((Date.now() - t0) / 1000)}s`);
     tick();
@@ -463,7 +498,8 @@
     overlays.push(o);
     place();
     // Draw the bubbles we have right now; used for the draft (fast first paint) and the final result.
-    const draw = (list, faded) => {
+    // quick: a streamed preview - no erasing (the heavy pixel work), the full answer redraws it properly
+    const draw = (list, faded, quick) => {
       el.replaceChildren();
       el.classList.toggle('manga-font', fontReady);
       const patches = document.createElement('div'); // erased source text, always below every translation
@@ -713,7 +749,7 @@
             delete b.dataset.limit;
           }
         };
-        jobs.push(dress);
+        if (!quick) jobs.push(dress);
         // Drag a translation to move it, Shift+drag to resize it. The spot is kept for this page and teaches the
         // extension where this model's boxes tend to land (background.js learnPlacement).
         let dragged = false;
@@ -838,6 +874,7 @@
       setTimeout(step, 0);
     };
     try {
+      if (!forced && await chapterVi()) { o.skip(VI_SKIP, () => viForced.add(chapterOf())); return; }
       const { msg, px, clean } = await encode(img);
       o.clean = clean || img;
       o.px = px;
@@ -846,21 +883,7 @@
       // no text, show a small badge with an override instead of calling the model. A tainted
       // canvas (px == null) can't be checked, so those pages always translate.
       if (px && typeof hasText === 'function' && window.__md.textOnly && !forced && !hasText(px).has) {
-        img.dataset.mdDone = 'skip'; // not '1': "Vẫn dịch" must be able to retry it
-        status.textContent = 'Trang không có chữ - bỏ qua để tiết kiệm lượt gọi';
-        const force = document.createElement('button');
-        force.className = 'md-retry';
-        force.textContent = 'Vẫn dịch';
-        force.onclick = () => { // override once: mark translated and re-enter the pipeline
-          const k = overlays.indexOf(o);
-          if (k >= 0) overlays.splice(k, 1);
-          o.el.remove();
-          translate(img, context, urgent, true); // forced: skips the detector, straight to the API
-        };
-        status.append(force);
-        el.replaceChildren(status);
-        clearInterval(timer);
-        o.busy = false;
+        o.skip('Trang không có chữ - bỏ qua để tiết kiệm lượt gọi');
         return;
       }
       // Draft-first: open a port so the worker can push the read pass's boxes the moment they
@@ -868,10 +891,28 @@
       const portName = o.tag;
       const port = chrome.runtime.connect({ name: portName });
       let stage = 'waiting'; // waiting -> draft -> final: a late draft must never overwrite the final
-      const draft = new Promise((res) => { port.onMessage.addListener((m) => { if (m.type === 'draft') res(m.bubbles); }); });
+      // Streamed preview: bubbles appear as the model finishes writing each one (live request: faster text). Each is
+      // fitted once on arrival, the page is redrawn at most every 300ms, and nothing is erased until the full read.
+      const previewed = [];
+      let previewAt = 0, previewTimer = 0;
+      const showPreview = () => {
+        previewTimer = 0;
+        if (stage !== 'waiting' || o.cancelled) return;
+        previewAt = Date.now();
+        draw(previewed, true, true);
+      };
+      const draft = new Promise((res) => {
+        port.onMessage.addListener((m) => {
+          if (m.type !== 'draft') return;
+          if (!m.partial) { clearTimeout(previewTimer); res(m.bubbles); return; }
+          if (stage !== 'waiting' || o.cancelled || !px || typeof fitBubbles !== 'function' || m.bubbles.length <= previewed.length) return;
+          previewed.push(...fitBubbles(px, m.bubbles.slice(previewed.length)));
+          if (!previewTimer) previewTimer = setTimeout(showPreview, Math.max(0, 300 - (Date.now() - previewAt)));
+        });
+      });
       o.series = await seriesNow();
       if (!window.__mdQuiet && !boundKey && o.series.key !== SITE) boundKey = o.series.key;
-      const final = chrome.runtime.sendMessage({ type: 'translate', ...msg, context, glossary: window.__md.glossary, site: o.series.key, seriesLabel: o.series.label, urgent, draftPort: portName })
+      const final = chrome.runtime.sendMessage({ type: 'translate', ...msg, context, glossary: window.__md.glossary, site: o.series.key, seriesLabel: o.series.label, urgent, draftPort: portName, ...(forced && { noVi: true }) })
         .finally(() => { stage = 'final'; try { port.disconnect(); } catch { /* already gone */ } });
       let early = null; // the missed-text pass, started on the draft's boxes while polish still runs
       draft.then((bubbles) => { // read pass done, polish still running: show the draft now
@@ -888,6 +929,14 @@
       const res = await final;
       if (o.cancelled) return;
       if (res.error) throw new Error(res.error);
+      if (res.vi) { // the model read Vietnamese: this page stays as it is, and so does the rest of the chapter
+        const ch = o.chapter;
+        viChapters.add(ch);
+        const force = () => { viChapters.delete(ch); viForced.add(ch); };
+        for (const x of overlays) if (x !== o && x.chapter === ch && x.busy && !x.cancelled) { x.cancel(); x.skip(VI_SKIP, force); } // their queued calls go too
+        o.skip(VI_SKIP, force);
+        return;
+      }
       o.key = res.key;
       // a line dragged while the draft was showing: the page had no cache entry yet, so the move wasn't saved - and
       // replacing o.moves here put the line back where the model had it (live report). Keep it and save it now.
@@ -1136,7 +1185,8 @@
 
   bindHere();
   window.__md = { overlays, pump, setSfx, stop, resume, running: () => !stopped, glossary: '', textOnly: true, sfx: true, recover: true, site: SITE };
-  chrome.storage.local.get(['sfx', 'textOnly', 'recover', 'ahead']).then((s) => {
+  chrome.storage.local.get(['sfx', 'textOnly', 'recover', 'ahead', 'skipVi']).then((s) => {
+    window.__md.skipVi = s.skipVi ?? true;
     AHEAD = s.ahead ?? 2;
     pump();
     window.__md.sfx = s.sfx ?? true;
@@ -1149,6 +1199,7 @@
     if (ch.sfx) setSfx(ch.sfx.newValue ?? true);
     if (ch.textOnly) window.__md.textOnly = ch.textOnly.newValue ?? true;
     if (ch.recover) window.__md.recover = ch.recover.newValue ?? true;
+    if (ch.skipVi) window.__md.skipVi = ch.skipVi.newValue ?? true;
     if (ch.ahead) { AHEAD = ch.ahead.newValue ?? 2; pump(); }
   });
   // small self-dismissing notice instead of alert(): never blocks the page; silent on auto-started sites

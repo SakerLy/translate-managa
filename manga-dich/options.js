@@ -180,7 +180,7 @@ $('test-polish').onclick = async () => {
 };
 
 // ---------- switches ----------
-for (const id of ['polish', 'recover', 'sfx', 'textOnly']) $(id).onchange = () => store({ [id]: $(id).checked });
+for (const id of ['polish', 'recover', 'sfx', 'textOnly', 'skipVi', 'stream', 'fastRead']) $(id).onchange = () => store({ [id]: $(id).checked });
 $('ahead').onchange = () => {
   const n = Math.max(0, Math.min(10, Math.round(+$('ahead').value || 0)));
   $('ahead').value = n;
@@ -258,7 +258,7 @@ $('reload').onclick = () => chrome.runtime.reload();
 (async () => {
   const hello = await chrome.runtime.sendMessage({ type: 'hello' }).catch(() => null);
   if (hello?.api !== API) { $('stale').hidden = false; return; }
-  st = await chrome.storage.local.get(['provider', 'keys', 'models', 'bases', 'polishModels', 'polish', 'sfx', 'textOnly', 'recover', 'autoSites', 'font', 'ahead']);
+  st = await chrome.storage.local.get(['provider', 'keys', 'models', 'bases', 'polishModels', 'polish', 'sfx', 'textOnly', 'recover', 'skipVi', 'stream', 'fastRead', 'autoSites', 'font', 'ahead']);
   st.keys ||= {}; st.models ||= {}; st.bases ||= {};
   ({ bases: defaults } = await send({ type: 'defaults' }).catch(() => ({ bases: {} })));
   const radio = document.querySelector(`input[name=provider][value="${st.provider || 'gemini'}"]`);
@@ -268,6 +268,7 @@ $('reload').onclick = () => chrome.runtime.reload();
   $('recover').checked = st.recover ?? true;
   $('sfx').checked = st.sfx ?? true;
   $('textOnly').checked = st.textOnly ?? true;
+  for (const id of ['skipVi', 'stream', 'fastRead']) $(id).checked = st[id] ?? true;
   $('ahead').value = st.ahead ?? 2;
   $('mangaFont').checked = (st.font || 'manga') !== 'system';
   renderSites();

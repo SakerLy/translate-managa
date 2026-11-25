@@ -127,6 +127,12 @@
       <span class="txt">Dịch cả SFX (từ tượng thanh)<small>Tắt để chỉ giữ lời thoại</small></span></label>
     <label class="switch"><input type="checkbox" id="textOnly"><span class="track" aria-hidden="true"></span>
       <span class="txt">Bỏ qua trang không có chữ<small>Trang bìa, tranh minh họa: không tốn lượt gọi; có nút “Vẫn dịch” trên trang</small></span></label>
+    <label class="switch"><input type="checkbox" id="skipVi"><span class="track" aria-hidden="true"></span>
+      <span class="txt">Bỏ qua chương đã là tiếng Việt<small>MangaDex: không tốn lượt gọi nào. Site khác: sau trang đầu thấy đã là tiếng Việt thì dừng cả chương; có nút “Vẫn dịch” trên trang</small></span></label>
+    <label class="switch"><input type="checkbox" id="stream"><span class="track" aria-hidden="true"></span>
+      <span class="txt">Hiện chữ dần khi AI đang viết<small>Bong bóng nào AI viết xong là hiện ngay, chưa xoá chữ gốc; cả trang xong thì vẽ lại đầy đủ. Tắt để chỉ hiện khi xong cả trang</small></span></label>
+    <label class="switch"><input type="checkbox" id="fastRead"><span class="track" aria-hidden="true"></span>
+      <span class="txt">AI đọc ảnh nhanh<small>Bảo model “suy nghĩ” ít khi đọc ảnh (Gemini, GPT, gpt-oss, qwen). Nhanh hơn với model có suy nghĩ; tắt nếu thấy bong bóng bị đặt lệch hơn</small></span></label>
 
     <label class="field" style="margin-top:14px"><b>Dịch trước</b>
       <span style="display:flex;align-items:center;gap:8px"><input type="number" id="ahead" min="0" max="10" step="1" style="width:5em"> trang sau trang đang đọc</span>
