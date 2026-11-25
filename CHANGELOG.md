@@ -4,9 +4,9 @@ Mọi thay đổi đáng chú ý của Manga Dịch. Định dạng theo [Keep a
 
 **Quy ước phát hành:** thay đổi mới được gom vào mục "Chưa phát hành". Chỉ khi chủ dự án đã test và đồng ý thì mới chốt số phiên bản và đẩy lên. Trong lúc chờ, popup và trang cài đặt hiện số phiên bản kèm `-beta`.
 
-Các bản tạm "ver 0.6.0" … "ver 0.8.0" (19–20/11/2026) chưa được test và chưa từng được phát hành; chúng đã được gộp thành một commit "0.6.0-beta", nội dung nằm trong mục dưới đây.
+Đánh số lại từ đầu: bản hiện tại là 0.0.1-beta; các số phiên bản cũ (0.5 … 0.8) đã bỏ.
 
-## [Chưa phát hành] - dự kiến 0.6.0
+## [Chưa phát hành] - 0.0.1-beta
 
 ### Thêm
 - **Xoá chữ gốc thay vì phủ khối trắng:** bong bóng được xoá theo đúng hình của nó (giữ viền và tranh), chữ thường được xoá từng nét; bản dịch vẽ bằng font truyện tranh Mali (đủ dấu tiếng Việt), xếp dòng theo dáng bong bóng.
@@ -129,18 +129,3 @@ Những lỗi bạn đã báo mà bản sửa chưa được xác nhận trên t
 - Khối phủ trên chữ viết thẳng lên tranh (cố ý chưa thu nhỏ: có thể để lộ chữ gốc).
 - Bỏ sót bong bóng với một số model.
 - Tên bộ truyện và trí nhớ xưng hô trên MangaDex (chưa thử được trong trình duyệt do MangaDex chặn trình duyệt test).
-
-## [0.5.4] - 2026-11-19
-- Model gắn nhãn loại chữ (bong bóng/khung/chữ trên tranh/SFX).
-
-## [0.5.3]
-- Văn phong tự nhiên cho bản scan tiếng Tây Ban Nha/Anh, gộp ô gọn hơn.
-
-## [0.5.2]
-- Sửa vị trí ô trên trang JPEG thật.
-
-## [0.5.1]
-- Trí nhớ AI theo từng bộ truyện.
-
-## [0.5]
-- Chỉ tập trung manga; Base URL không mặc định /v1.

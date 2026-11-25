@@ -251,7 +251,7 @@ Model chậm hoặc quá tải. Sau 150 giây trang báo lỗi kèm nút **Thử
 <details>
 <summary><b>"Provider returned error" hoặc lỗi JSON schema</b></summary>
 
-Từ bản 0.5 lỗi hiện nguyên nhân thật của nhà cung cấp. Lỗi schema kiểu *"required … Missing 'x'"* là do model không hỗ trợ JSON schema strict; chọn model khác.
+Lỗi hiện nguyên nhân thật của nhà cung cấp. Lỗi schema kiểu *"required … Missing 'x'"* là do model không hỗ trợ JSON schema strict; chọn model khác.
 </details>
 
 <a id="phat-trien"></a>
@@ -337,8 +337,8 @@ Theo [Semantic Versioning](https://semver.org/lang/vi/) `MAJOR.MINOR.PATCH` (tr�
 
 | Thay đổi | Tăng | Ví dụ |
 |---|---|---|
-| Chỉ sửa lỗi, tinh chỉnh prompt/thuật toán, không thêm gì cho người dùng | PATCH | 0.6.0 → 0.6.1 |
-| Thêm tính năng hoặc cài đặt mới, vẫn dùng được cài đặt cũ | MINOR | 0.6.1 → 0.7.0 |
+| Chỉ sửa lỗi, tinh chỉnh prompt/thuật toán, không thêm gì cho người dùng | PATCH | 0.0.1 → 0.0.2 |
+| Thêm tính năng hoặc cài đặt mới, vẫn dùng được cài đặt cũ | MINOR | 0.0.2 → 0.1.0 |
 | Cài đặt/trí nhớ cũ không dùng được nữa | MAJOR (từ 1.0 trở đi; trước 1.0 tăng MINOR) | 1.4.2 → 2.0.0 |
 
 Chỉ chốt số phiên bản sau khi chủ dự án đã test và đồng ý. Trong lúc chờ, thay đổi ghi ở mục "Chưa phát hành" của CHANGELOG và `version_name` trong manifest mang hậu tố `-beta` (hiện trong popup và trang cài đặt).

@@ -276,7 +276,7 @@ $('reload').onclick = () => chrome.runtime.reload();
   const want = new URLSearchParams(location.search).get('site');
   const all = sites.slice();
   if (want && !all.some((s) => s.key === want)) all.unshift({ key: want, label: '' });
-  // "Kaoru Hana wa Rin to Saku · mangadex.org"; memories from before 0.5.1 were per site: "mangadex.org (cả site)"
+  // "Kaoru Hana wa Rin to Saku · mangadex.org"; memories from early builds were per site: "mangadex.org (cả site)"
   const name = ({ key, label }) => (key.includes('/') ? `${label || key.split('/').pop()} · ${key.split('/')[0]}` : `${key} (cả site)`);
   all.sort((a, z) => name(a).localeCompare(name(z)));
   $('mem-site').replaceChildren(...(all.length ? all.map((s) => new Option(name(s), s.key)) : [new Option('Chưa có bộ nào - dịch vài trang trước', '')]));
